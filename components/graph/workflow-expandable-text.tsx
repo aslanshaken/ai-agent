@@ -30,11 +30,11 @@ export function WorkflowExpandableTextarea({
 
   return (
     <>
-      <label className="block text-xs font-medium text-zinc-500">{label}</label>
+      <label className="block text-[13px] font-medium text-zinc-500">{label}</label>
       <button
         type="button"
         className={cn(
-          "nodrag w-full rounded-md border border-zinc-300 bg-white px-2.5 py-2 text-left text-sm leading-snug text-zinc-900 shadow-sm outline-none ring-offset-2 transition-colors hover:border-zinc-400 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80 dark:focus-visible:ring-zinc-600",
+          "nodrag w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-left text-[13px] leading-snug text-zinc-900 shadow-sm outline-none ring-offset-2 transition-colors hover:border-zinc-400 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80 dark:focus-visible:ring-zinc-600",
           !value && "text-zinc-400",
           textareaClassName,
         )}
@@ -90,11 +90,11 @@ export function WorkflowModalInput({
 
   return (
     <>
-      <label className="block text-xs font-medium text-zinc-500">{label}</label>
+      <label className="block text-[13px] font-medium text-zinc-500">{label}</label>
       <button
         type="button"
         className={cn(
-          "nodrag w-full truncate rounded-md border border-zinc-300 bg-white px-2.5 py-2 text-left text-sm text-zinc-900 shadow-sm outline-none ring-offset-2 transition-colors hover:border-zinc-400 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80 dark:focus-visible:ring-zinc-600",
+          "nodrag w-full truncate rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-left text-[13px] text-zinc-900 shadow-sm outline-none ring-offset-2 transition-colors hover:border-zinc-400 hover:bg-zinc-50 focus-visible:ring-2 focus-visible:ring-zinc-400 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/80 dark:focus-visible:ring-zinc-600",
           inputClassName,
         )}
         onClick={() => setOpen(true)}

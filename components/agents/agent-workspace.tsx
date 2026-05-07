@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Edge, Node } from "reactflow";
 import {
   AgentFlowEditor,
@@ -16,23 +16,23 @@ import { AgentWorkflowDrawer } from "@/components/agents/agent-workflow-drawer";
 import { AgentDetailsDrawer } from "@/components/agents/agent-details-drawer";
 import { AgentMemoryPermissionsDrawer } from "@/components/agents/agent-memory-permissions-drawer";
 import { AgentScheduleDrawer } from "@/components/agents/agent-schedule-drawer";
+import { AgentRunsDrawer } from "@/components/agents/agent-runs-drawer";
+import { AgentApprovalsDrawer } from "@/components/agents/agent-approvals-drawer";
 import { buildAgentPatchBody } from "@/lib/agents/build-agent-patch-body";
 import type { AgentBuilderInitial } from "@/components/agents/agent-builder-client";
 import type { TimelineStep } from "@/components/agents/agent-run-timeline";
 import { parseChatCommand } from "@/lib/agents/chat-command-parser";
 import {
-  analyzeWorkflowHealth,
   explainWorkflowFromGraph,
   stepCompletionChatMessage,
   suggestWorkflowImprovements,
 } from "@/lib/agents/workflow-chat-helpers";
+import { formatFriendlyRunSummary } from "@/lib/runs/run-output-summary";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  buildWelcomeChatMessages,
+  loadAgentChatMessages,
+  saveAgentChatMessages,
+} from "@/lib/agents/agent-chat-storage";
 
 type RunPollPayload = {
   pendingApproval: { id: string } | null;
@@ -75,17 +75,14 @@ function initialsFromName(name: string): string {
 }
 
 function formatRunPayloadSummary(data: RunPollPayload): string {
-  const st = data.run.status;
-  const steps = data.steps?.length ?? 0;
-  let out = `Run ${data.run.id.slice(0, 8)}… — status: ${st.replace(/_/g, " ")}. Steps: ${steps}.`;
-  if (data.run.error) out += `\nError: ${data.run.error}`;
-  if (data.run.output != null && st === "completed") {
-    const o = data.run.output;
-    const snippet =
-      typeof o === "object" ? JSON.stringify(o, null, 2).slice(0, 900) : String(o);
-    out += `\n\nOutput:\n${snippet}${snippet.length >= 900 ? "\n…" : ""}`;
-  }
-  return out;
+  const steps = data.steps.map((s) => ({ output: s.output }));
+  return formatFriendlyRunSummary({
+    runId: data.run.id,
+    status: data.run.status,
+    error: data.run.error,
+    output: data.run.output,
+    steps,
+  });
 }
 
 export function AgentWorkspace({
@@ -152,14 +149,31 @@ export function AgentWorkspace({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [memoryOpen, setMemoryOpen] = useState(false);
+  const [runsDrawerOpen, setRunsDrawerOpen] = useState(false);
+  const [approvalsDrawerOpen, setApprovalsDrawerOpen] = useState(false);
 
-  const [messages, setMessages] = useState<ChatMessage[]>(() => [
-    {
-      id: "intro",
-      role: "system",
-      content: `${initial?.name ?? "This agent"} — ask in plain language or use the shortcuts. Run or save from chat, explain the workflow, summarize the last run, check approvals, or get improvement ideas.`,
-    },
-  ]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  /** Hydrate transcript before paint when possible; restore prior session from localStorage. */
+  useLayoutEffect(() => {
+    const stored = loadAgentChatMessages(agentId);
+    setMessages(
+      stored?.length
+        ? stored
+        : buildWelcomeChatMessages(
+            agentId,
+            initial?.name ?? "Agent",
+            initial?.nodes ?? [],
+            initial?.edges ?? [],
+          ),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- welcome seed uses `initial` from this agent mount only.
+  }, [agentId]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
+    saveAgentChatMessages(agentId, messages);
+  }, [messages, agentId]);
 
   const [pollRunId, setPollRunId] = useState<string | null>(null);
   const [approvalPause, setApprovalPause] = useState(false);
@@ -241,21 +255,6 @@ export function AgentWorkspace({
     initial?.nodes,
     initial?.edges,
   ]);
-
-  const workflowSnapshot = useMemo(() => {
-    void graphEpoch;
-    const snap = editorRef.current?.getSnapshot();
-    if (snap) return snap;
-    return {
-      nodes: initial?.nodes ?? [],
-      edges: initial?.edges ?? [],
-    };
-  }, [graphEpoch, initial?.nodes, initial?.edges]);
-
-  const health = useMemo(
-    () => analyzeWorkflowHealth(workflowSnapshot.nodes),
-    [workflowSnapshot],
-  );
 
   const persist = useCallback(
     async (options?: {
@@ -407,14 +406,15 @@ export function AgentWorkspace({
           setPollRunId(null);
           setApprovalPause(false);
           if (st === "completed") {
-            const out = data.run.output;
-            const summary =
-              out && typeof out === "object"
-                ? JSON.stringify(out, null, 2).slice(0, 1200)
-                : String(out ?? "Done.");
             appendChat({
               role: "assistant",
-              content: `Run completed.\n\n${summary}${summary.length >= 1200 ? "\n…" : ""}`,
+              content: formatFriendlyRunSummary({
+                runId: data.run.id,
+                status: data.run.status,
+                error: data.run.error,
+                output: data.run.output,
+                steps: data.steps.map((s) => ({ output: s.output })),
+              }),
             });
           } else if (st === "failed" || st === "cancelled") {
             appendChat({
@@ -454,7 +454,10 @@ export function AgentWorkspace({
   }, [runPoll, latestRun]);
 
   const dispatchCommand = useCallback(
-    async (raw: string) => {
+    async (
+      raw: string,
+      priorHistory: { role: "user" | "assistant"; content: string }[],
+    ) => {
       const { intent } = parseChatCommand(raw);
       const snap = editorRef.current?.getSnapshot() ?? {
         nodes: (initial?.nodes ?? []) as Node[],
@@ -471,13 +474,26 @@ export function AgentWorkspace({
           return;
         }
         case "run_agent":
-          appendChat({ role: "assistant", content: "Starting a run now." });
+          appendChat({
+            role: "assistant",
+            content:
+              "Starting a run — same as the Run agent button. Watch the timeline below; open Runs in the header for the full report.",
+          });
           await runAgent({ silent: true });
           return;
         case "explain_workflow":
           appendChat({
             role: "assistant",
-            content: explainWorkflowFromGraph(snap.nodes, snap.edges),
+            content: [
+              explainWorkflowFromGraph(snap.nodes, snap.edges),
+              "",
+              "In this workspace:",
+              "• Run agent — runs the full workflow (search, AI steps, approval, saves).",
+              "• Workflow — edit nodes and queries on the canvas (auto-saves).",
+              "• Details — name, description, mission.",
+              "• Memory & Permissions / Schedule — memory scopes, risk, timing.",
+              "• Runs / Approvals (header) — history and human review.",
+            ].join("\n"),
           });
           return;
         case "latest_run_summary":
@@ -494,12 +510,12 @@ export function AgentWorkspace({
             appendChat({
               role: "assistant",
               content:
-                "There is a pending approval on the current run — use the approval card below.",
+                "There is a pending approval on the current run — follow the prompts in the chat panel, or open Approvals in the header.",
             });
           } else if (pendingApprovalsCount > 0) {
             appendChat({
               role: "assistant",
-              content: `This agent has ${pendingApprovalsCount} pending approval(s). Open Approvals in the sidebar for the full inbox.`,
+              content: `This agent has ${pendingApprovalsCount} pending approval(s). Open Approvals in the header for the full inbox.`,
             });
           } else {
             appendChat({
@@ -533,15 +549,39 @@ export function AgentWorkspace({
           setMemoryOpen(true);
           appendChat({ role: "assistant", content: "Opening Memory & Permissions." });
           return;
-        default:
-          appendChat({
-            role: "assistant",
-            content:
-              "I can run or save this agent, explain the workflow, summarize the latest run, show pending approvals, suggest improvements, or open Workflow / Schedule / Details / Memory. Try the quick actions below.",
-          });
+        default: {
+          try {
+            const res = await fetch(`/api/agents/${agentId}/chat`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ message: raw, history: priorHistory }),
+            });
+            const data = (await res.json()) as { reply?: string; error?: string };
+            if (!res.ok) {
+              appendChat({
+                role: "assistant",
+                content: data.error ?? "Could not get a reply from the assistant.",
+              });
+              return;
+            }
+            appendChat({
+              role: "assistant",
+              content: data.reply ?? "No reply returned.",
+            });
+          } catch {
+            appendChat({
+              role: "assistant",
+              content:
+                "Could not reach the assistant. Check your connection, OpenAI API key, and try again.",
+            });
+          }
+          return;
+        }
       }
     },
     [
+      agentId,
       appendChat,
       initial?.edges,
       initial?.nodes,
@@ -557,15 +597,19 @@ export function AgentWorkspace({
 
   const handleMessageInput = useCallback(
     async (text: string) => {
+      const priorHistory = messages
+        .filter((m) => m.role === "user" || m.role === "assistant")
+        .slice(-12)
+        .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
       appendChat({ role: "user", content: text });
       setChatBusy(true);
       try {
-        await dispatchCommand(text);
+        await dispatchCommand(text, priorHistory);
       } finally {
         setChatBusy(false);
       }
     },
-    [appendChat, dispatchCommand],
+    [appendChat, dispatchCommand, messages],
   );
 
   const headerStatus: WorkspaceHeaderStatus = useMemo(() => {
@@ -603,106 +647,43 @@ export function AgentWorkspace({
 
   const timelineSteps = runPoll?.steps ?? [];
 
-  const latestRunDisplay = runPoll
-    ? runPoll.run
-    : latestRun
-      ? { id: latestRun.id, status: latestRun.status, error: null as string | null }
-      : null;
-
-  const displayRunStatus = runPoll?.run.status ?? latestRun?.status ?? null;
-
   return (
-    <div className="space-y-6">
-      <AgentHeader
-        name={name}
-        initials={initialsFromName(name)}
-        status={headerStatus}
-        onWorkflow={() => setWorkflowOpen(true)}
-        onDetails={() => setDetailsOpen(true)}
-        onSchedule={() => setScheduleOpen(true)}
-        onMemory={() => setMemoryOpen(true)}
-      />
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <div className="shrink-0 space-y-4 border-b border-zinc-200 px-6 pb-4 pt-6 dark:border-zinc-800">
+        <AgentHeader
+          name={name}
+          initials={initialsFromName(name)}
+          status={headerStatus}
+          pendingApprovalsCount={pendingApprovalsCount}
+          onWorkflow={() => setWorkflowOpen(true)}
+          onDetails={() => setDetailsOpen(true)}
+          onSchedule={() => setScheduleOpen(true)}
+          onMemory={() => setMemoryOpen(true)}
+          onRuns={() => {
+            setApprovalsDrawerOpen(false);
+            setRunsDrawerOpen(true);
+          }}
+          onApprovals={() => {
+            setRunsDrawerOpen(false);
+            setApprovalsDrawerOpen(true);
+          }}
+        />
 
-      {message ? (
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
-      ) : null}
+        {message ? (
+          <p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
+        ) : null}
+      </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div className="min-h-0 flex-1 overflow-hidden">
         <AgentChatPanel
           messages={messages}
           onSendMessage={handleMessageInput}
-          onQuickAction={handleMessageInput}
           timelineSteps={timelineSteps}
           runStatus={runPoll?.run.status ?? null}
           approvalId={pendingApprovalId}
           onApprovalResolved={handleApprovalResolved}
           isProcessing={chatBusy}
         />
-
-        <aside className="space-y-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Workflow health</CardTitle>
-              <CardDescription>From the current graph.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-              <p>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">Nodes:</span>{" "}
-                {health.nodeCount}
-              </p>
-              <p>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">Approval node:</span>{" "}
-                {health.hasApprovalNode ? "yes" : "no"}
-              </p>
-              <p>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">save_to_db:</span>{" "}
-                {health.hasSaveToDb ? "yes" : "no"}
-              </p>
-              <p>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">Schedule:</span>{" "}
-                {scheduleEnabled ? "enabled" : "off"}
-              </p>
-              <p>
-                <span className="font-medium text-zinc-800 dark:text-zinc-200">Last run:</span>{" "}
-                <span className="capitalize">{displayRunStatus?.replace(/_/g, " ") ?? "—"}</span>
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Approvals</CardTitle>
-              <CardDescription>Pending steps for this agent.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-semibold tabular-nums">{pendingApprovalsCount}</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Latest run</CardTitle>
-              <CardDescription>Active session or last saved run.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
-              {latestRunDisplay ? (
-                <>
-                  <p className="font-mono text-xs text-zinc-500">
-                    {latestRunDisplay.id.slice(0, 8)}…
-                  </p>
-                  <p className="capitalize text-zinc-900 dark:text-zinc-100">
-                    {latestRunDisplay.status.replace(/_/g, " ")}
-                  </p>
-                  {"error" in latestRunDisplay && latestRunDisplay.error ? (
-                    <p className="text-xs text-red-600">{latestRunDisplay.error}</p>
-                  ) : null}
-                </>
-              ) : (
-                <p className="text-zinc-500">No runs yet.</p>
-              )}
-            </CardContent>
-          </Card>
-        </aside>
       </div>
 
       <AgentWorkflowDrawer
@@ -711,14 +692,13 @@ export function AgentWorkspace({
           setWorkflowOpen(false);
           setGraphEpoch((n) => n + 1);
         }}
-        onSaveWorkflow={() => void persist()}
-        saving={saving}
       >
         <AgentFlowEditor
           ref={editorRef}
           key={agentId}
           initialNodes={initial?.nodes}
           initialEdges={initial?.edges}
+          onGraphChange={() => void persist({ showBanner: false })}
         />
       </AgentWorkflowDrawer>
 
@@ -757,6 +737,17 @@ export function AgentWorkspace({
       <AgentScheduleDrawer
         open={scheduleOpen}
         onClose={() => setScheduleOpen(false)}
+        agentId={agentId}
+      />
+
+      <AgentRunsDrawer
+        open={runsDrawerOpen}
+        onClose={() => setRunsDrawerOpen(false)}
+        agentId={agentId}
+      />
+      <AgentApprovalsDrawer
+        open={approvalsDrawerOpen}
+        onClose={() => setApprovalsDrawerOpen(false)}
         agentId={agentId}
       />
     </div>

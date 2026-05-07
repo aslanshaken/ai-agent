@@ -65,22 +65,21 @@ export default async function AgentDetailPage(props: PageProps) {
   }));
 
   return (
-    <div className="space-y-6">
-      <AgentWorkspace
-        agentId={loaded.agent.id}
-        pendingApprovalsCount={pendingApprovals}
-        scheduleEnabled={scheduleEnabled}
-        latestRun={latestRunMeta}
-        initial={{
-          name: loaded.agent.name,
-          description: loaded.agent.description,
-          mission: loaded.agent.mission,
-          memory_categories: loaded.agent.memory_categories as string[] | null | undefined,
-          permission_profile: loaded.agent.permission_profile as Record<string, unknown> | null,
-          nodes: rfNodes,
-          edges: rfEdges,
-        }}
-      />
-    </div>
+    <AgentWorkspace
+      key={loaded.agent.id}
+      agentId={loaded.agent.id}
+      pendingApprovalsCount={pendingApprovals}
+      scheduleEnabled={scheduleEnabled}
+      latestRun={latestRunMeta}
+      initial={{
+        name: loaded.agent.name,
+        description: loaded.agent.description,
+        mission: loaded.agent.mission,
+        memory_categories: loaded.agent.memory_categories as string[] | null | undefined,
+        permission_profile: loaded.agent.permission_profile as Record<string, unknown> | null,
+        nodes: rfNodes,
+        edges: rfEdges,
+      }}
+    />
   );
 }

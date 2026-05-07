@@ -10,6 +10,12 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { buttonClassName } from "@/components/ui/button";
 
+function looksLikeAgentId(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
+
+type PageProps = { searchParams: Promise<{ agentId?: string }> };
+
 type ApprovalPayload = {
   nodeId?: string;
   approvalNodeReactFlowId?: string;
@@ -26,7 +32,12 @@ function payloadSummary(payload: unknown): string {
   return `Node ${node} · ${upstream} upstream · plan ${plan} steps`;
 }
 
-export default async function ApprovalsPage() {
+export default async function ApprovalsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
+  const rawAgentId = searchParams.agentId;
+  const requestedFilter =
+    typeof rawAgentId === "string" && looksLikeAgentId(rawAgentId) ? rawAgentId : null;
+
   type Row = {
     id: string;
     title: string;
@@ -38,9 +49,29 @@ export default async function ApprovalsPage() {
   };
 
   let rows: Row[] = [];
+  let filterAgentName: string | null = null;
+  let filterAgentId: string | null = null;
+
   try {
     const supabase = await createServerSupabaseClient();
-    const { data } = await supabase
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (user && requestedFilter) {
+      const { data: ag } = await supabase
+        .from("agents")
+        .select("id, name")
+        .eq("user_id", user.id)
+        .eq("id", requestedFilter)
+        .maybeSingle();
+      if (ag) {
+        filterAgentId = ag.id as string;
+        filterAgentName = (ag.name as string) ?? null;
+      }
+    }
+
+    let q = supabase
       .from("approvals")
       .select(
         `
@@ -55,6 +86,12 @@ export default async function ApprovalsPage() {
       )
       .order("created_at", { ascending: false })
       .limit(50);
+
+    if (filterAgentId) {
+      q = q.eq("agent_id", filterAgentId);
+    }
+
+    const { data } = await q;
     rows = (data as Row[]) ?? [];
   } catch {
     rows = [];
@@ -64,17 +101,54 @@ export default async function ApprovalsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Approvals</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Human-in-the-loop gates. Approving resumes the agent run; rejecting cancels it.
-        </p>
+        {filterAgentId ? (
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {filterAgentName ?? "Agent"}
+            </span>
+            {" · "}
+            <Link
+              href={`/agents/${filterAgentId}`}
+              className="text-violet-600 underline-offset-4 hover:underline dark:text-violet-400"
+            >
+              Workspace
+            </Link>
+            {" · "}
+            <Link
+              href="/approvals"
+              className="text-violet-600 underline-offset-4 hover:underline dark:text-violet-400"
+            >
+              All agents
+            </Link>
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Human-in-the-loop gates. Approving resumes the agent run; rejecting cancels it.
+          </p>
+        )}
       </div>
       {rows.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>Inbox empty</CardTitle>
+            <CardTitle>{filterAgentId ? "No approvals for this agent" : "Inbox empty"}</CardTitle>
             <CardDescription>
-              Runs pause at approval nodes until you approve or reject. Create an agent that includes
-              an approval step (the briefing template does).
+              {filterAgentId ? (
+                <>
+                  Nothing pending here —{" "}
+                  <Link
+                    href="/approvals"
+                    className="font-medium text-violet-600 underline-offset-4 hover:underline dark:text-violet-400"
+                  >
+                    view all approvals
+                  </Link>
+                  .
+                </>
+              ) : (
+                <>
+                  Runs pause at approval nodes until you approve or reject. Create an agent that includes
+                  an approval step (the briefing template does).
+                </>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">

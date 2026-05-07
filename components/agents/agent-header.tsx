@@ -9,18 +9,24 @@ export function AgentHeader({
   name,
   initials,
   status,
+  pendingApprovalsCount,
   onWorkflow,
   onDetails,
   onSchedule,
   onMemory,
+  onRuns,
+  onApprovals,
 }: {
   name: string;
   initials: string;
   status: WorkspaceHeaderStatus;
+  pendingApprovalsCount: number;
   onWorkflow: () => void;
   onDetails: () => void;
   onSchedule: () => void;
   onMemory: () => void;
+  onRuns: () => void;
+  onApprovals: () => void;
 }) {
   const statusLabel: Record<WorkspaceHeaderStatus, string> = {
     saved: "Saved",
@@ -37,7 +43,7 @@ export function AgentHeader({
   };
 
   return (
-    <header className="flex flex-col gap-4 border-b border-zinc-200 pb-4 dark:border-zinc-800 lg:flex-row lg:items-start lg:justify-between">
+    <header className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="flex min-w-0 items-start gap-3">
         <div
           className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-sm font-semibold text-white shadow-sm"
@@ -45,11 +51,11 @@ export function AgentHeader({
         >
           {initials.slice(0, 2).toUpperCase()}
         </div>
-        <div className="min-w-0 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h1 className="truncate text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-              {name || "Untitled agent"}
-            </h1>
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {name || "Untitled agent"}
+          </h1>
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <span
               className={cn(
                 "rounded-full px-2 py-0.5 text-[11px] font-medium",
@@ -62,14 +68,10 @@ export function AgentHeader({
               Private
             </span>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">
-            Run and save from the chat below — use these buttons to edit workflow, details, schedule,
-            and memory.
-          </p>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
         <Button type="button" variant="outline" size="sm" onClick={onWorkflow}>
           Workflow
         </Button>
@@ -81,6 +83,33 @@ export function AgentHeader({
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onMemory}>
           Memory &amp; Permissions
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRuns}
+          title="Runs for this agent"
+        >
+          Runs
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onApprovals}
+          title="Approvals for this agent"
+          className="gap-1.5"
+        >
+          <span>Approvals</span>
+          {pendingApprovalsCount > 0 ? (
+            <span
+              className="min-w-[1.125rem] rounded-full bg-orange-500/15 px-1.5 py-px text-center text-[10px] font-semibold text-orange-900 dark:text-orange-200"
+              aria-label={`${pendingApprovalsCount} pending`}
+            >
+              {pendingApprovalsCount > 99 ? "99+" : pendingApprovalsCount}
+            </span>
+          ) : null}
         </Button>
       </div>
     </header>

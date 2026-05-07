@@ -38,9 +38,14 @@ export default async function AgentsPage() {
             Database-driven workflows — nothing is hardcoded per use case.
           </p>
         </div>
-        <Link href="/agents/new" className={buttonClassName("default", "sm")}>
-          Create agent
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/agents/templates" className={buttonClassName("outline", "sm")}>
+            Templates
+          </Link>
+          <Link href="/agents/new" className={buttonClassName("default", "sm")}>
+            Create agent
+          </Link>
+        </div>
       </div>
       {agents.length === 0 ? (
         <Card>
@@ -58,8 +63,8 @@ export default async function AgentsPage() {
             >
               Founder Daily Briefing
             </Link>
-            <Link href="/agents/new" className={buttonClassName("outline", "sm")}>
-              Other templates
+            <Link href="/agents/templates" className={buttonClassName("outline", "sm")}>
+              Browse templates
             </Link>
           </CardContent>
         </Card>

@@ -1,14 +1,16 @@
 "use client";
 
-import { forwardRef, useCallback, useImperativeHandle, useMemo } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   MarkerType,
+  Panel,
   addEdge,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
   type Edge,
   type Node,
@@ -40,7 +42,34 @@ type Props = {
   className?: string;
   initialNodes?: Node[];
   initialEdges?: Edge[];
+  /** Called after local edits (debounced). Used for auto-save. */
+  onGraphChange?: (snapshot: FlowSnapshot) => void;
 };
+
+function ReorderToolbar({
+  onReorganize,
+}: {
+  onReorganize: () => void;
+}) {
+  const { fitView } = useReactFlow();
+  return (
+    <Panel position="top-right" className="!m-2">
+      <button
+        type="button"
+        onClick={() => {
+          onReorganize();
+          window.setTimeout(() => {
+            fitView({ padding: 0.28, maxZoom: 1.1 });
+          }, 0);
+        }}
+        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-900 shadow-sm hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+        title="Reorder nodes left to right along the workflow"
+      >
+        Reorder
+      </button>
+    </Panel>
+  );
+}
 
 const defaultNodes: Node[] = [
   {
@@ -76,7 +105,7 @@ function dedupeEdgesByNodePair(edges: Edge[]): Edge[] {
 }
 
 export const AgentFlowEditor = forwardRef<AgentFlowEditorHandle, Props>(
-  function AgentFlowEditor({ className, initialNodes, initialEdges }, ref) {
+  function AgentFlowEditor({ className, initialNodes, initialEdges, onGraphChange }, ref) {
     const laidOutNodes = useMemo(() => {
       const seed = initialNodes?.length ? initialNodes : defaultNodes;
       return layoutWorkflowLeftToRight(seed, initialEdges ?? []);
@@ -97,6 +126,23 @@ export const AgentFlowEditor = forwardRef<AgentFlowEditorHandle, Props>(
       }),
       [nodes, edges],
     );
+
+    const skipGraphNotifyRef = useRef(true);
+    useEffect(() => {
+      if (!onGraphChange) return;
+      if (skipGraphNotifyRef.current) {
+        skipGraphNotifyRef.current = false;
+        return;
+      }
+      const t = window.setTimeout(() => {
+        onGraphChange({ nodes, edges });
+      }, 420);
+      return () => window.clearTimeout(t);
+    }, [nodes, edges, onGraphChange]);
+
+    const handleReorganize = useCallback(() => {
+      setNodes((current) => layoutWorkflowLeftToRight([...current], edges));
+    }, [edges, setNodes]);
 
     const isValidConnection = useCallback(
       (connection: Connection) => {
@@ -119,9 +165,15 @@ export const AgentFlowEditor = forwardRef<AgentFlowEditorHandle, Props>(
     );
 
     return (
-      <div className={cn("flex h-[640px] flex-col", className)}>
-        <div className="min-h-0 flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+      <div
+        className={cn(
+          "flex h-full w-full min-h-0 flex-1 flex-col",
+          className,
+        )}
+      >
+        <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
           <ReactFlow
+            className="h-full min-h-[min(68dvh,780px)] w-full"
             nodes={nodes}
             edges={edges}
             onNodesChange={onNodesChange}
@@ -143,6 +195,7 @@ export const AgentFlowEditor = forwardRef<AgentFlowEditorHandle, Props>(
             }}
             proOptions={{ hideAttribution: true }}
           >
+            <ReorderToolbar onReorganize={handleReorganize} />
             <MiniMap zoomable pannable />
             <Controls />
             <Background gap={16} />

@@ -10,7 +10,18 @@ import { buttonClassName } from "@/components/ui/button";
 import { RunStatusCard } from "@/components/runs/run-status-card";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export default async function RunsPage() {
+function looksLikeAgentId(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+}
+
+type PageProps = { searchParams: Promise<{ agentId?: string }> };
+
+export default async function RunsPage(props: PageProps) {
+  const searchParams = await props.searchParams;
+  const rawAgentId = searchParams.agentId;
+  const requestedFilter =
+    typeof rawAgentId === "string" && looksLikeAgentId(rawAgentId) ? rawAgentId : null;
+
   type RunRow = {
     id: string;
     agent_id: string;
@@ -26,6 +37,9 @@ export default async function RunsPage() {
   };
 
   let runs: RunRow[] = [];
+  let filterAgentName: string | null = null;
+  let filterAgentId: string | null = null;
+
   try {
     const supabase = await createServerSupabaseClient();
     const {
@@ -37,7 +51,22 @@ export default async function RunsPage() {
         .select("id")
         .eq("user_id", user.id);
       const agentIds = (agentRows ?? []).map((r) => r.id as string);
-      if (agentIds.length > 0) {
+
+      if (requestedFilter && agentIds.includes(requestedFilter)) {
+        filterAgentId = requestedFilter;
+        const { data: named } = await supabase
+          .from("agents")
+          .select("name")
+          .eq("user_id", user.id)
+          .eq("id", requestedFilter)
+          .maybeSingle();
+        filterAgentName = (named?.name as string) ?? null;
+      }
+
+      const scopedAgentIds =
+        filterAgentId ? agentIds.filter((id) => id === filterAgentId) : agentIds;
+
+      if (scopedAgentIds.length > 0) {
         const { data } = await supabase
           .from("agent_runs")
           .select(
@@ -55,7 +84,7 @@ export default async function RunsPage() {
             agents ( name )
           `,
           )
-          .in("agent_id", agentIds)
+          .in("agent_id", scopedAgentIds)
           .order("created_at", { ascending: false })
           .limit(50);
         runs = (data as unknown as RunRow[]) ?? [];
@@ -69,17 +98,48 @@ export default async function RunsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Runs</h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Every run stores steps, outputs, and errors in Supabase.
-        </p>
+        {filterAgentId ? (
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="font-medium text-zinc-800 dark:text-zinc-200">
+              {filterAgentName ?? "Agent"}
+            </span>
+            {" · "}
+            <Link
+              href={`/agents/${filterAgentId}`}
+              className="text-violet-600 underline-offset-4 hover:underline dark:text-violet-400"
+            >
+              Workspace
+            </Link>
+            {" · "}
+            <Link href="/runs" className="text-violet-600 underline-offset-4 hover:underline dark:text-violet-400">
+              All agents
+            </Link>
+          </p>
+        ) : (
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            Every run stores steps, outputs, and errors in Supabase.
+          </p>
+        )}
       </div>
       {runs.length === 0 ? (
         <Card>
           <CardHeader>
-            <CardTitle>No runs yet</CardTitle>
+            <CardTitle>{filterAgentId ? "No runs for this agent yet" : "No runs yet"}</CardTitle>
             <CardDescription>
-              Open one of your agents and press <span className="font-medium">Run now</span> to test
-              the workflow. You&apos;ll land on the run detail page to approve or review steps.
+              {filterAgentId ? (
+                <>
+                  Trigger a run from this agent&apos;s workspace, or{" "}
+                  <Link href="/runs" className="font-medium text-violet-600 underline-offset-4 hover:underline dark:text-violet-400">
+                    view all runs
+                  </Link>
+                  .
+                </>
+              ) : (
+                <>
+                  Open one of your agents and press <span className="font-medium">Run now</span> to test
+                  the workflow. You&apos;ll land on the run detail page to approve or review steps.
+                </>
+              )}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-wrap gap-2">

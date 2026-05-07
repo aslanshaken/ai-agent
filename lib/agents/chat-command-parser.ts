@@ -105,6 +105,19 @@ export function parseChatCommand(raw: string): ParsedChatCommand {
     return { intent: "improve_workflow", confidence: 0.88 };
   }
 
+  // Execute configured workflow (search investors, run pipeline — same as Run agent button)
+  if (!/\bdon'?t\s+run\b/.test(t)) {
+    if (
+      /\b(find|search|look\s+up)\b.*\binvestors?\b/.test(t) ||
+      /\binvestors?\b.*\b(find|search|look\s+up)\b/.test(t) ||
+      /\b(do\s+(the\s+)?search|execute\s+(the\s+)?workflow|run\s+(the\s+)?(full\s+)?workflow)\b/.test(t) ||
+      /\bfetch\b.*\b(results?|investors?)\b/.test(t) ||
+      /\b(run|start)\b.*\b(research|search|pipeline)\b/.test(t)
+    ) {
+      return { intent: "run_agent", confidence: 0.87 };
+    }
+  }
+
   // Run agent (exclude "don't run")
   if (!/\bdon'?t\s+run\b/.test(t)) {
     if (

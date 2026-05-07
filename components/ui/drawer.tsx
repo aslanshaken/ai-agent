@@ -10,6 +10,7 @@ export function Drawer({
   children,
   widthClassName = "max-w-lg",
   footer,
+  bodyClassName,
 }: {
   open: boolean;
   onClose: () => void;
@@ -17,6 +18,8 @@ export function Drawer({
   children: React.ReactNode;
   widthClassName?: string;
   footer?: React.ReactNode;
+  /** Extra classes for the scrollable body (e.g. overflow-hidden flex flex-col for full-height children). */
+  bodyClassName?: string;
 }) {
   return (
     <div
@@ -48,7 +51,14 @@ export function Drawer({
             <X className="size-5" aria-hidden />
           </button>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">{children}</div>
+        <div
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto px-4 py-4",
+            bodyClassName,
+          )}
+        >
+          {children}
+        </div>
         {footer ? (
           <div className="shrink-0 border-t border-zinc-200 px-4 py-3 dark:border-zinc-800">
             {footer}

@@ -16,6 +16,14 @@ import {
 import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 
+/** `/agents/[id]` workspace — not list, new, or templates */
+function isAgentDetailWorkspace(pathname: string): boolean {
+  if (!pathname.startsWith("/agents/")) return false;
+  const slug = pathname.slice("/agents/".length);
+  if (!slug || slug.includes("/")) return false;
+  return slug !== "new" && slug !== "templates";
+}
+
 const navLinks = [
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/runs", label: "Runs", icon: ScrollText },
@@ -27,6 +35,7 @@ const navLinks = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/dashboard";
+  const agentWorkspaceFill = isAgentDetailWorkspace(pathname);
   const [sidebarHovered, setSidebarHovered] = useState(false);
 
   useEffect(() => {
@@ -66,7 +75,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex min-h-screen min-w-0 flex-1">
+    <div
+      className={cn(
+        "flex min-w-0 flex-1",
+        // Agent workspace: lock to viewport so the chat composer cannot expand the page and scroll away.
+        agentWorkspaceFill ? "h-dvh max-h-dvh overflow-hidden" : "min-h-screen",
+      )}
+    >
       <aside
         className={cn(
           "flex shrink-0 flex-col border-r border-zinc-200 bg-zinc-50/95 backdrop-blur transition-[width] duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-950/95",
@@ -79,7 +94,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="shrink-0 border-b border-zinc-200 p-2 dark:border-zinc-800">
           <Link
             href="/dashboard"
-            title="Founder OS"
+            title="Ai Agent Lab"
             className={cn(
               "flex items-center gap-3 rounded-md py-2 text-sm font-semibold tracking-tight text-zinc-900 transition-colors hover:bg-violet-50 hover:text-violet-900 dark:text-zinc-50 dark:hover:bg-violet-950/40 dark:hover:text-violet-100",
               sidebarHovered ? "px-2.5" : "justify-center px-0",
@@ -95,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 sidebarHovered ? "max-w-[11rem] truncate opacity-100" : "sr-only",
               )}
             >
-              Founder OS
+              Ai Agent Lab
             </span>
           </Link>
         </div>
@@ -161,7 +176,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
       </aside>
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto p-6">{children}</main>
+      <main
+        className={cn(
+          "min-h-0 min-w-0 flex-1",
+          agentWorkspaceFill
+            ? "flex flex-col overflow-hidden"
+            : "overflow-auto p-6",
+        )}
+      >
+        {children}
+      </main>
     </div>
   );
 }

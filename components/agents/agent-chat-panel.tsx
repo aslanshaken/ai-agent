@@ -17,15 +17,6 @@ export type ChatMessage = {
   content: string;
 };
 
-const QUICK_ACTIONS = [
-  { label: "Run", text: "run" },
-  { label: "Save", text: "save" },
-  { label: "Explain workflow", text: "explain workflow" },
-  { label: "Latest run", text: "latest run" },
-  { label: "Pending approval", text: "pending approval" },
-  { label: "Improve", text: "improve workflow" },
-] as const;
-
 function MessageBubble({
   m,
 }: {
@@ -82,7 +73,6 @@ function MessageBubble({
 export function AgentChatPanel({
   messages,
   onSendMessage,
-  onQuickAction,
   timelineSteps,
   runStatus,
   approvalId,
@@ -92,7 +82,6 @@ export function AgentChatPanel({
 }: {
   messages: ChatMessage[];
   onSendMessage: (text: string) => void | Promise<void>;
-  onQuickAction: (text: string) => void | Promise<void>;
   timelineSteps: TimelineStep[];
   runStatus: string | null;
   approvalId: string | null;
@@ -101,39 +90,34 @@ export function AgentChatPanel({
   /** Shows typing indicator while assistant logic runs */
   isProcessing?: boolean;
 }) {
-  const endRef = useRef<HTMLDivElement>(null);
+  /** Scroll only this pane — never use scrollIntoView (it scrolls main / window). */
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+    const el = transcriptRef.current;
+    if (!el) return;
+    const run = () => {
+      el.scrollTop = el.scrollHeight;
+    };
+    requestAnimationFrame(() => requestAnimationFrame(run));
   }, [messages, timelineSteps, runStatus, approvalId, isProcessing]);
 
   return (
     <div
       className={cn(
-        "flex min-h-[min(560px,calc(100vh-14rem))] flex-col overflow-hidden rounded-2xl border border-zinc-200/90 bg-zinc-50/50 shadow-lg shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-950/80 dark:shadow-black/40",
+        // Fills parent: only the transcript scrolls; composer stays at the bottom (no nested card chrome).
+        "flex h-full min-h-0 flex-col overflow-hidden",
       )}
     >
-      <div className="border-b border-zinc-200/80 bg-white/90 px-4 py-3 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/90">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Workspace chat
-            </h2>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              History, commands, live run steps & approvals
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-3 py-4 sm:px-5">
+      <div
+        ref={transcriptRef}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-6 py-4 [overflow-anchor:none]"
+      >
         <div className="space-y-5">
           {messages.map((m) => (
             <MessageBubble key={m.id} m={m} />
           ))}
         </div>
-
-        {isProcessing ? <ChatTypingIndicator /> : null}
 
         {timelineSteps.length > 0 || runStatus ? (
           <AgentRunTimeline steps={timelineSteps} runStatus={runStatus} />
@@ -145,35 +129,16 @@ export function AgentChatPanel({
             onResolved={onApprovalResolved}
           />
         ) : null}
-
-        <div ref={endRef} className="h-px shrink-0" aria-hidden />
       </div>
 
-      <div className="border-t border-zinc-200/80 bg-white/95 px-3 py-2.5 dark:border-zinc-800 dark:bg-zinc-950/95">
-        <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {QUICK_ACTIONS.map((a) => (
-            <button
-              key={a.label}
-              type="button"
-              disabled={composerDisabled || isProcessing}
-              onClick={() => void onQuickAction(a.text)}
-              className={cn(
-                "shrink-0 rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-700 shadow-sm transition-colors",
-                "hover:border-zinc-300 hover:bg-zinc-50",
-                "disabled:pointer-events-none disabled:opacity-40",
-                "dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800",
-              )}
-            >
-              {a.label}
-            </button>
-          ))}
-        </div>
+      <div className="sticky bottom-0 z-20 mt-3 mb-3 flex shrink-0 flex-col gap-2 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
+        {isProcessing ? <ChatTypingIndicator compact /> : null}
+        <AgentChatComposer
+          onSend={onSendMessage}
+          submitDisabled={composerDisabled || isProcessing}
+          inputLocked={composerDisabled}
+        />
       </div>
-
-      <AgentChatComposer
-        onSend={onSendMessage}
-        disabled={composerDisabled || isProcessing}
-      />
     </div>
   );
 }

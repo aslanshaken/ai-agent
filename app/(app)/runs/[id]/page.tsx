@@ -14,6 +14,11 @@ import { ApprovalActions } from "@/components/approvals/approval-actions";
 import { RunDetailRefresh } from "@/components/runs/run-detail-refresh";
 import { RunExecutePendingButton } from "@/components/runs/run-execute-pending-button";
 import { loadRunDetail } from "@/lib/runs/load-run";
+import {
+  pickPrimarySummaryFromRun,
+  pickSearchHighlight,
+  truncateDisplayText,
+} from "@/lib/runs/run-output-summary";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -352,72 +357,6 @@ function stepBadgeClass(status: string) {
   }
 }
 
-function extractOutputsMap(
-  runOutput: unknown,
-): Record<string, Record<string, unknown>> | null {
-  if (!runOutput || typeof runOutput !== "object" || Array.isArray(runOutput)) return null;
-  const raw = (runOutput as Record<string, unknown>).outputsByNodeId;
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const out: Record<string, Record<string, unknown>> = {};
-  for (const [k, v] of Object.entries(raw)) {
-    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v as Record<string, unknown>;
-  }
-  return Object.keys(out).length ? out : null;
-}
-
-function pickPrimarySummaryFromRun(
-  runOutput: unknown,
-  steps: { output: unknown }[],
-): { headline: string | null; actionItems: string[] } {
-  const actionItems: string[] = [];
-
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const o = steps[i]?.output;
-    if (isAiReasoningStepOutput(o) && o.summary?.trim()) {
-      const items = Array.isArray(o.actionItems)
-        ? o.actionItems.filter((x): x is string => typeof x === "string")
-        : [];
-      for (const it of items.slice(0, 10)) actionItems.push(it);
-      return { headline: o.summary!.trim(), actionItems };
-    }
-  }
-
-  const map = extractOutputsMap(runOutput);
-  if (map) {
-    for (const val of Object.values(map)) {
-      if (
-        val.kind === "ai_reasoning" &&
-        typeof val.summary === "string" &&
-        val.summary.trim()
-      ) {
-        return { headline: val.summary.trim(), actionItems };
-      }
-    }
-  }
-
-  if (runOutput && typeof runOutput === "object" && !Array.isArray(runOutput)) {
-    const s = (runOutput as Record<string, unknown>).summary;
-    if (typeof s === "string" && s.trim()) {
-      return { headline: s.trim(), actionItems };
-    }
-  }
-
-  return { headline: null, actionItems };
-}
-
-function pickSearchHighlight(steps: { output: unknown }[]): string | null {
-  for (let i = steps.length - 1; i >= 0; i--) {
-    const o = steps[i]?.output;
-    if (isSearchStepOutput(o)) {
-      const n = typeof o.resultCount === "number" ? o.resultCount : 0;
-      const q = (o.query ?? "").trim();
-      const short = q.length > 100 ? `${q.slice(0, 100)}…` : q;
-      return `Retrieved ${n} result${n === 1 ? "" : "s"}${short ? ` · ${short}` : ""}`;
-    }
-  }
-  return null;
-}
-
 export default async function RunDetailPage(props: PageProps) {
   const { id } = await props.params;
   let detail: Awaited<ReturnType<typeof loadRunDetail>> = null;
@@ -458,7 +397,9 @@ export default async function RunDetailPage(props: PageProps) {
   );
   const searchHighlight = pickSearchHighlight(detail.steps);
   const resultHeadline =
-    rawHeadline && rawHeadline !== "Execution finished." ? rawHeadline : null;
+    rawHeadline && rawHeadline !== "Execution finished."
+      ? truncateDisplayText(rawHeadline, 520)
+      : null;
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 pb-8">
@@ -470,7 +411,12 @@ export default async function RunDetailPage(props: PageProps) {
           </p>
           <h1 className="text-2xl font-semibold tracking-tight">
             {agentName ?? "Agent"}{" "}
-            <span className="font-mono text-base font-normal text-zinc-500">{id}</span>
+            <span
+              className="font-mono text-base font-normal text-zinc-500"
+              title={id}
+            >
+              {id.slice(0, 8)}…
+            </span>
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span
@@ -545,7 +491,7 @@ export default async function RunDetailPage(props: PageProps) {
         )}
       >
         <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
-          Results
+          At a glance
         </p>
 
         {runStatus === "failed" ? (
@@ -621,7 +567,7 @@ export default async function RunDetailPage(props: PageProps) {
         !resultHeadline &&
         !searchHighlight ? (
           <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Run finished — open <strong>Steps</strong> below for each node&apos;s output and raw JSON.
+            Run finished — expand <strong>Steps</strong> below if you need technical detail or raw JSON.
           </p>
         ) : null}
 
@@ -721,14 +667,14 @@ export default async function RunDetailPage(props: PageProps) {
         </details>
       ) : null}
 
-      <details open className="group rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+      <details className="group rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
         <summary
           className={cn(
             "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-zinc-900 outline-none transition hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900",
             "[&::-webkit-details-marker]:hidden",
           )}
         >
-          <span>Steps ({detail.steps.length})</span>
+          <span>Steps ({detail.steps.length}) — expand for per-node detail</span>
           <ChevronDown
             className="size-4 shrink-0 text-zinc-400 transition-transform duration-200 group-open:rotate-180"
             aria-hidden

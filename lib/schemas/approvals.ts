@@ -9,3 +9,7 @@ export const patchApprovalSchema = z.object({
 });
 
 export type PatchApprovalBody = z.infer<typeof patchApprovalSchema>;
+
+export const approvalsQuerySchema = z.object({
+  agentId: z.string().uuid().optional(),
+});

@@ -7,10 +7,16 @@ import { Button } from "@/components/ui/button";
 export function ApprovalActions({
   approvalId,
   runId,
+  suppressRedirect,
+  onSettled,
 }: {
   approvalId: string;
   /** When set, successful approve navigates to this run (unless already on that run page). */
   runId?: string | null;
+  /** When true, never navigate away after approve/reject (e.g. agent workspace drawers). */
+  suppressRedirect?: boolean;
+  /** Called after a successful approve or reject. */
+  onSettled?: () => void;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -36,6 +42,11 @@ export function ApprovalActions({
       const j = (await res.json().catch(() => ({}))) as { error?: string; runId?: string };
       if (!res.ok) {
         throw new Error(j.error ?? "Update failed");
+      }
+      onSettled?.();
+      if (suppressRedirect) {
+        router.refresh();
+        return;
       }
       const targetRun = j.runId ?? runId;
       const onRunPage =

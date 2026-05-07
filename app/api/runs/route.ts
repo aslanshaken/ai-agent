@@ -6,7 +6,8 @@ export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url);
     const parsed = runQuerySchema.safeParse({
-      limit: searchParams.get("limit") ?? undefined,
+      limit: searchParams.get("limit") || undefined,
+      agentId: searchParams.get("agentId") || undefined,
     });
     if (!parsed.success) {
       return NextResponse.json(
@@ -14,7 +15,7 @@ export async function GET(req: Request) {
         { status: 400 },
       );
     }
-    const { limit } = parsed.data;
+    const { limit, agentId } = parsed.data;
 
     const supabase = await createServerSupabaseClient();
     const {
@@ -24,7 +25,22 @@ export async function GET(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data, error } = await supabase
+    if (agentId) {
+      const { data: own, error: ownErr } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("id", agentId)
+        .maybeSingle();
+      if (ownErr) {
+        return NextResponse.json({ error: ownErr.message }, { status: 500 });
+      }
+      if (!own) {
+        return NextResponse.json({ error: "Agent not found" }, { status: 404 });
+      }
+    }
+
+    let q = supabase
       .from("agent_runs")
       .select(
         `
@@ -43,6 +59,12 @@ export async function GET(req: Request) {
       )
       .order("created_at", { ascending: false })
       .limit(limit);
+
+    if (agentId) {
+      q = q.eq("agent_id", agentId);
+    }
+
+    const { data, error } = await q;
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

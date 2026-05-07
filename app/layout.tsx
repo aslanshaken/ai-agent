@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Synoro Founder OS",
+  title: "Ai Agent Lab",
   description: "Visual AI workflow platform for founder operations.",
 };
 
