@@ -1,7 +1,14 @@
 import { z } from "zod";
 
+/** Legacy graphs may store `mock`; coerce to Exa at parse time. */
+const providerSchema = z.preprocess((raw) => {
+  if (raw === undefined || raw === null || raw === "") return "exa";
+  if (raw === "mock") return "exa";
+  return raw;
+}, z.enum(["exa", "tavily"]));
+
 export const searchNodeDataSchema = z.object({
-  provider: z.enum(["mock", "exa", "tavily"]).default("mock"),
+  provider: providerSchema,
   query: z.string().max(2000).optional(),
   limit: z.coerce.number().int().min(1).max(20).optional().default(5),
 });
@@ -12,7 +19,7 @@ export function parseSearchNodeExecutionInput(
   data: Record<string, unknown>,
   agentMission: string | null,
 ):
-  | { ok: true; provider: "mock" | "exa" | "tavily"; query: string; limit: number }
+  | { ok: true; provider: "exa" | "tavily"; query: string; limit: number }
   | { ok: false; error: string } {
   const parsed = searchNodeDataSchema.safeParse(data);
   if (!parsed.success) {

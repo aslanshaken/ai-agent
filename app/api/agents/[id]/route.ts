@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { agentNameTakenByAnother } from "@/lib/agents/agent-name-unique";
 import { updateAgentBodySchema } from "@/lib/schemas/agents";
 import { uuidRouteParamSchema } from "@/lib/schemas/route-params";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -132,6 +133,16 @@ export async function PATCH(req: Request, ctx: Ctx) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    if (
+      body.name !== undefined &&
+      (await agentNameTakenByAnother(supabase, user.id, body.name, id))
+    ) {
+      return NextResponse.json(
+        { error: "An agent with this name already exists. Choose a different name." },
+        { status: 409 },
+      );
+    }
+
     const updates: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
@@ -191,6 +202,44 @@ export async function PATCH(req: Request, ctx: Ctx) {
           return NextResponse.json({ error: eErr.message }, { status: 500 });
         }
       }
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Server error";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: Request, ctx: Ctx) {
+  try {
+    const rawParams = await ctx.params;
+    const parsedParams = uuidRouteParamSchema.safeParse(rawParams);
+    if (!parsedParams.success) {
+      return NextResponse.json({ error: "Invalid agent id" }, { status: 400 });
+    }
+    const { id } = parsedParams.data;
+
+    const supabase = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const { data: deleted, error } = await supabase
+      .from("agents")
+      .delete()
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .select("id");
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!deleted?.length) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     return NextResponse.json({ ok: true });

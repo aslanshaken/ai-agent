@@ -67,10 +67,7 @@ export function WorkflowNode(props: NodeProps) {
   };
 
   if (t === "search") {
-    const provider =
-      data?.provider === "exa" || data?.provider === "tavily" || data?.provider === "mock"
-        ? data.provider
-        : "mock";
+    const provider = data?.provider === "tavily" ? "tavily" : "exa";
     const query = typeof data?.query === "string" ? data.query : "";
     const limitRaw = data?.limit;
     const limit =
@@ -97,11 +94,10 @@ export function WorkflowNode(props: NodeProps) {
             value={provider}
             onChange={(e) =>
               patchData({
-                provider: e.target.value as "mock" | "exa" | "tavily",
+                provider: e.target.value as "exa" | "tavily",
               })
             }
           >
-            <option value="mock">mock</option>
             <option value="exa">exa</option>
             <option value="tavily">tavily</option>
           </select>

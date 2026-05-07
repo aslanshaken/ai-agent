@@ -4,7 +4,7 @@ type TavilyHit = { title?: string; url?: string; content?: string };
 
 /**
  * Tavily search. Requires `TAVILY_API_KEY`.
- * @throws on HTTP or parse errors — caller should fall back to mock.
+ * @throws on HTTP or parse errors — caller may fall back to Exa.
  */
 export async function tavilySearch(query: string, limit: number): Promise<SearchToolResult> {
   const key = process.env.TAVILY_API_KEY?.trim();

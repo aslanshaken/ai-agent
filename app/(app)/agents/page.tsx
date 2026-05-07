@@ -6,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { AgentListCard } from "@/components/agents/agent-list-card";
 import { buttonClassName } from "@/components/ui/button";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -72,19 +73,12 @@ export default async function AgentsPage() {
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((a) => (
             <li key={a.id}>
-              <Link href={`/agents/${a.id}`}>
-                <Card className="transition-colors hover:border-zinc-400 dark:hover:border-zinc-600">
-                  <CardHeader className="space-y-1 p-4 pb-2">
-                    <CardTitle className="text-sm font-semibold leading-snug">{a.name}</CardTitle>
-                    <CardDescription className="line-clamp-2 text-xs leading-snug">
-                      {a.description || "No description"}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-3 pt-0 text-[11px] leading-tight text-zinc-500">
-                    Updated {new Date(a.updated_at).toLocaleString()}
-                  </CardContent>
-                </Card>
-              </Link>
+              <AgentListCard
+                id={a.id}
+                name={a.name}
+                description={a.description}
+                updatedAt={a.updated_at}
+              />
             </li>
           ))}
         </ul>

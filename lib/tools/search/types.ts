@@ -1,4 +1,4 @@
-export type SearchProvider = "mock" | "exa" | "tavily";
+export type SearchProvider = "exa" | "tavily";
 
 export type SearchToolInput = {
   provider: SearchProvider;
@@ -13,7 +13,7 @@ export type SearchResultItem = {
   source: string;
 };
 
-/** Normalized output from any search adapter (including mock fallback). */
+/** Normalized output from Exa or Tavily adapters. */
 export type SearchToolResult = {
   providerUsed: string;
   query: string;

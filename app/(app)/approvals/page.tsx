@@ -16,22 +16,6 @@ function looksLikeAgentId(s: string): boolean {
 
 type PageProps = { searchParams: Promise<{ agentId?: string }> };
 
-type ApprovalPayload = {
-  nodeId?: string;
-  approvalNodeReactFlowId?: string;
-  upstreamNodeIds?: string[];
-  planOrder?: string[];
-};
-
-function payloadSummary(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "—";
-  const p = payload as ApprovalPayload;
-  const node = p.approvalNodeReactFlowId ?? p.nodeId ?? "—";
-  const upstream = Array.isArray(p.upstreamNodeIds) ? p.upstreamNodeIds.length : 0;
-  const plan = Array.isArray(p.planOrder) ? p.planOrder.length : 0;
-  return `Node ${node} · ${upstream} upstream · plan ${plan} steps`;
-}
-
 export default async function ApprovalsPage(props: PageProps) {
   const searchParams = await props.searchParams;
   const rawAgentId = searchParams.agentId;
@@ -44,7 +28,6 @@ export default async function ApprovalsPage(props: PageProps) {
     status: string;
     created_at: string;
     run_id: string | null;
-    payload: unknown;
     agents: { name: string } | { name: string }[] | null;
   };
 
@@ -80,7 +63,6 @@ export default async function ApprovalsPage(props: PageProps) {
         status,
         created_at,
         run_id,
-        payload,
         agents ( name )
       `,
       )
@@ -165,8 +147,6 @@ export default async function ApprovalsPage(props: PageProps) {
           {rows.map((r) => {
             const agentRel = r.agents;
             const agentName = Array.isArray(agentRel) ? agentRel[0]?.name : agentRel?.name;
-            const payload = r.payload as ApprovalPayload | null;
-            const nodeId = payload?.approvalNodeReactFlowId ?? payload?.nodeId ?? "—";
             return (
               <li key={r.id} id={`approval-${r.id}`}>
                 <Card>
@@ -204,18 +184,6 @@ export default async function ApprovalsPage(props: PageProps) {
                       <div>
                         <dt className="font-medium text-zinc-500 dark:text-zinc-400">Agent</dt>
                         <dd>{agentName ?? "—"}</dd>
-                      </div>
-                      <div>
-                        <dt className="font-medium text-zinc-500 dark:text-zinc-400">Run</dt>
-                        <dd className="font-mono">{r.run_id ?? "—"}</dd>
-                      </div>
-                      <div>
-                        <dt className="font-medium text-zinc-500 dark:text-zinc-400">Approval node</dt>
-                        <dd className="font-mono">{nodeId}</dd>
-                      </div>
-                      <div>
-                        <dt className="font-medium text-zinc-500 dark:text-zinc-400">Payload summary</dt>
-                        <dd>{payloadSummary(r.payload)}</dd>
                       </div>
                     </dl>
                     {r.status === "pending" ? (

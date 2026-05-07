@@ -4,7 +4,7 @@ type ExaHit = { title?: string; url?: string; text?: string };
 
 /**
  * Exa neural/keyword search. Requires `EXA_API_KEY`.
- * @throws on HTTP or parse errors — caller should fall back to mock.
+ * @throws on HTTP or parse errors — caller may fall back to Tavily.
  */
 export async function exaSearch(query: string, limit: number): Promise<SearchToolResult> {
   const key = process.env.EXA_API_KEY?.trim();

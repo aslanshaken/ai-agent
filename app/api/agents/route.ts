@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { agentNameTakenByAnother } from "@/lib/agents/agent-name-unique";
 import { createAgentBodySchema } from "@/lib/schemas/agents";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -46,6 +47,13 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    if (await agentNameTakenByAnother(supabase, user.id, body.name)) {
+      return NextResponse.json(
+        { error: "An agent with this name already exists. Choose a different name." },
+        { status: 409 },
+      );
     }
 
     const insertRow: Record<string, unknown> = {
