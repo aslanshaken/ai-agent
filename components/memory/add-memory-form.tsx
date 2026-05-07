@@ -37,13 +37,13 @@ export function AddMemoryForm() {
       <div className="grid gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <label className="text-xs text-zinc-500" htmlFor="mem-scope">
-            Scope
+            Category
           </label>
           <Input
             id="mem-scope"
             value={scope}
             onChange={(e) => setScope(e.target.value)}
-            placeholder="global, investor, product…"
+            placeholder="company_context, research_history…"
           />
         </div>
       </div>

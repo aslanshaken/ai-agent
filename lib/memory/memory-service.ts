@@ -11,7 +11,7 @@ export async function listCompanyMemory(
   }
   const { data, error } = await supabase
     .from("company_memory")
-    .select("id, scope, content, created_at")
+    .select("id, scope, category, title, content, content_json, created_at, updated_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: false })
     .limit(opts?.limit ?? 50);
@@ -26,9 +26,19 @@ export async function addCompanyMemory(
   scope: string,
   content: string,
 ) {
+  const trimmed = content.trim();
+  const title =
+    trimmed.length <= 120 ? trimmed || "Memory entry" : `${trimmed.slice(0, 117)}…`;
   const { data, error } = await supabase
     .from("company_memory")
-    .insert({ user_id: userId, scope, content })
+    .insert({
+      user_id: userId,
+      scope,
+      category: scope,
+      content: trimmed,
+      title,
+      content_json: { text: trimmed },
+    })
     .select("id")
     .single();
 

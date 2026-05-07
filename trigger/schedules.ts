@@ -1,11 +1,15 @@
-import { task } from "@trigger.dev/sdk/v3";
+import { schedules } from "@trigger.dev/sdk/v3";
+import { processDueSchedules } from "@/lib/scheduling/process-due-schedules";
 
 /**
- * Placeholder for scheduled agent ticks — replace with per-agent schedule fan-out.
+ * Polls DB every 5 minutes for due `agent_schedules` rows and starts runs via the same path as
+ * “Run now” (Trigger.dev execute-agent task or inline dev execution).
  */
-export const scheduledAgentTick = task({
-  id: "scheduled-agent-tick",
+export const scheduleRunnerTick = schedules.task({
+  id: "schedule-runner-tick",
+  cron: "*/5 * * * *",
   run: async () => {
-    return { ok: true as const, at: new Date().toISOString() };
+    const result = await processDueSchedules();
+    return result;
   },
 });

@@ -6,7 +6,7 @@ export async function loadAgentForUser(
 ) {
   const { data: agent, error: aErr } = await supabase
     .from("agents")
-    .select("id, name, description, mission, updated_at")
+    .select("id, name, description, mission, memory_categories, permission_profile, updated_at")
     .eq("id", agentId)
     .single();
 

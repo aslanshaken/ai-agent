@@ -10,6 +10,12 @@ import {
 import { getNodeExecutor } from "@/lib/agents/executors/mock-executors";
 import type { ExecutionNode, ExecutionPlanSnapshot } from "@/lib/agents/executors/types";
 import {
+  isNodeTypeAllowed,
+  parsePermissionProfile,
+  type PermissionProfile,
+} from "@/lib/agents/permission-profile";
+import { recordAgentRunMetrics } from "@/lib/agents/run-metrics";
+import {
   finalizeRun,
   insertRunStep,
   markRunFailed,
@@ -18,6 +24,14 @@ import {
 } from "@/lib/agents/save-results";
 
 type ServiceClient = SupabaseClient;
+
+const DEFAULT_MEMORY_CATEGORIES = [
+  "company_context",
+  "research_history",
+  "competitors",
+  "investor_preferences",
+  "candidate_preferences",
+] as const;
 
 function isAgentNodeType(t: string): t is AgentNodeType {
   return (nodeTypes as readonly string[]).includes(t);
@@ -70,6 +84,8 @@ type LoadedRunContext = {
   };
   userId: string;
   agentMission: string | null;
+  memoryCategories: string[];
+  permissionProfile: PermissionProfile;
   executionNodes: ExecutionNode[];
   edges: GraphEdgeRow[];
   ordered: ExecutionNode[];
@@ -97,7 +113,7 @@ async function loadRunExecutionContext(
 
   const { data: agentRow, error: agentErr } = await supabase
     .from("agents")
-    .select("user_id, mission")
+    .select("user_id, mission, memory_categories, permission_profile")
     .eq("id", run.agent_id as string)
     .single();
 
@@ -110,6 +126,11 @@ async function loadRunExecutionContext(
     typeof agentRow.mission === "string" && agentRow.mission.trim()
       ? agentRow.mission.trim()
       : null;
+
+  const mcRaw = agentRow.memory_categories as string[] | null | undefined;
+  const memoryCategories =
+    Array.isArray(mcRaw) && mcRaw.length > 0 ? mcRaw : [...DEFAULT_MEMORY_CATEGORIES];
+  const permissionProfile = parsePermissionProfile(agentRow.permission_profile);
 
   const { data: nodeRows, error: nodesErr } = await supabase
     .from("agent_nodes")
@@ -163,6 +184,8 @@ async function loadRunExecutionContext(
       },
       userId,
       agentMission,
+      memoryCategories,
+      permissionProfile,
       executionNodes,
       edges,
       ordered,
@@ -183,6 +206,8 @@ async function executeOrderedNodes(
     agentId: string;
     userId: string;
     agentMission: string | null;
+    memoryCategories: string[];
+    permissionProfile: PermissionProfile;
     edges: GraphEdgeRow[];
     plan: ExecutionPlanSnapshot;
     ordered: ExecutionNode[];
@@ -192,8 +217,20 @@ async function executeOrderedNodes(
     outputsByNodeId: Record<string, Record<string, unknown>>;
   },
 ): Promise<LoopResult> {
-  const { runId, agentId, userId, agentMission, edges, plan, ordered, startIndex, initialStepIndex, outputsByNodeId } =
-    params;
+  const {
+    runId,
+    agentId,
+    userId,
+    agentMission,
+    memoryCategories,
+    permissionProfile,
+    edges,
+    plan,
+    ordered,
+    startIndex,
+    initialStepIndex,
+    outputsByNodeId,
+  } = params;
 
   const runtime = {
     supabase,
@@ -203,6 +240,8 @@ async function executeOrderedNodes(
     agentMission,
     edges,
     executionPlan: plan,
+    memoryCategories,
+    permissionProfile,
   };
 
   let stepIndex = initialStepIndex;
@@ -214,6 +253,12 @@ async function executeOrderedNodes(
       if (!executor) {
         await markRunFailed(supabase, runId, `No executor for type ${node.type}`);
         return { kind: "failed", error: `No executor for type ${node.type}` };
+      }
+
+      if (!isNodeTypeAllowed(node.type, permissionProfile)) {
+        const msg = `Node type "${node.type}" is not allowed by this agent's permission profile.`;
+        await markRunFailed(supabase, runId, msg);
+        return { kind: "failed", error: msg };
       }
 
       const upstreamOutputs = collectUpstreamOutputs(node.react_flow_id, edges, outputsByNodeId);
@@ -286,6 +331,8 @@ async function executeOrderedNodes(
       error: null,
     });
 
+    await recordAgentRunMetrics(supabase, runId);
+
     return { kind: "completed" };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
@@ -334,6 +381,8 @@ export async function processAgentRun(
     agentId: ctx.run.agent_id,
     userId: ctx.userId,
     agentMission: ctx.agentMission,
+    memoryCategories: ctx.memoryCategories,
+    permissionProfile: ctx.permissionProfile,
     edges: ctx.edges,
     plan: ctx.plan,
     ordered: ctx.ordered,
@@ -412,6 +461,7 @@ export async function resumeAgentRunAfterApproval(
       },
       error: null,
     });
+    await recordAgentRunMetrics(supabase, runId);
     return { ok: true };
   }
 
@@ -422,6 +472,8 @@ export async function resumeAgentRunAfterApproval(
     agentId: ctx.run.agent_id,
     userId: ctx.userId,
     agentMission: ctx.agentMission,
+    memoryCategories: ctx.memoryCategories,
+    permissionProfile: ctx.permissionProfile,
     edges: ctx.edges,
     plan: ctx.plan,
     ordered: ctx.ordered,

@@ -1,12 +1,7 @@
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { buttonClassName } from "@/components/ui/button";
+import { RunDeleteButton } from "@/components/runs/run-delete-button";
 
 export type RunStatusCardProps = {
   id: string;
@@ -17,6 +12,9 @@ export type RunStatusCardProps = {
   error: string | null;
   output: unknown;
   triggerRunId: string | null;
+  /** manual | scheduled — omit when unknown / legacy rows */
+  source?: string | null;
+  scheduledFor?: string | null;
 };
 
 export function RunStatusCard({
@@ -26,42 +24,51 @@ export function RunStatusCard({
   createdAt,
   completedAt,
   error,
-  output,
+  output: _output,
   triggerRunId,
+  source,
+  scheduledFor,
 }: RunStatusCardProps) {
+  const metaParts = [
+    new Date(createdAt).toLocaleString(),
+    completedAt ? `→ ${new Date(completedAt).toLocaleString()}` : null,
+    source ? (source === "scheduled" ? "Scheduled" : "Manual") : null,
+    scheduledFor ? `target ${new Date(scheduledFor).toLocaleString()}` : null,
+  ].filter(Boolean);
+
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <CardTitle className="text-base">
-            {agentName}{" "}
-            <span className="font-mono text-xs font-normal text-zinc-500">
-              {id.slice(0, 8)}…
+    <Card className="overflow-hidden">
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="text-sm font-semibold leading-snug text-zinc-950 dark:text-zinc-50">
+              {agentName}{" "}
+              <span className="font-mono text-[11px] font-normal text-zinc-500">
+                {id.slice(0, 8)}…
+              </span>
+            </h3>
+            <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium capitalize dark:bg-zinc-800">
+              {status}
             </span>
-          </CardTitle>
-          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium capitalize dark:bg-zinc-800">
-            {status}
-          </span>
+          </div>
+          <p className="text-[11px] leading-snug text-zinc-500">
+            {metaParts.join(" · ")}
+            {triggerRunId ? (
+              <>
+                {" · "}
+                <span title={triggerRunId}>Trigger {triggerRunId.slice(0, 14)}…</span>
+              </>
+            ) : null}
+          </p>
+          {error ? <p className="text-xs text-red-600 dark:text-red-400">{error}</p> : null}
         </div>
-        <CardDescription>
-          {new Date(createdAt).toLocaleString()}
-          {completedAt ? ` → ${new Date(completedAt).toLocaleString()}` : null}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <Link href={`/runs/${id}`} className={buttonClassName("outline", "sm")}>
-          Open run
-        </Link>
-        {error ? <p className="text-red-600 dark:text-red-400">{error}</p> : null}
-        {output && typeof output === "object" ? (
-          <pre className="max-h-40 overflow-auto rounded-md bg-zinc-950 p-3 text-xs text-zinc-100">
-            {JSON.stringify(output, null, 2)}
-          </pre>
-        ) : null}
-        {triggerRunId ? (
-          <p className="text-xs text-zinc-500">Trigger.dev run: {triggerRunId}</p>
-        ) : null}
-      </CardContent>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <Link href={`/runs/${id}`} className={buttonClassName("outline", "sm")}>
+            Open
+          </Link>
+          <RunDeleteButton runId={id} />
+        </div>
+      </div>
     </Card>
   );
 }

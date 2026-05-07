@@ -8,7 +8,6 @@ import {
   ClipboardCheck,
   Database,
   FlaskConical,
-  LayoutDashboard,
   LogOut,
   Plug,
   ScrollText,
@@ -18,7 +17,6 @@ import { createBrowserSupabaseClient } from "@/lib/supabase/client";
 import { cn } from "@/lib/utils/cn";
 
 const navLinks = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/agents", label: "Agents", icon: Bot },
   { href: "/runs", label: "Runs", icon: ScrollText },
   { href: "/approvals", label: "Approvals", icon: ClipboardCheck },
@@ -81,7 +79,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="shrink-0 border-b border-zinc-200 p-2 dark:border-zinc-800">
           <Link
             href="/dashboard"
-            title="AI Agent Lab"
+            title="Founder OS"
             className={cn(
               "flex items-center gap-3 rounded-md py-2 text-sm font-semibold tracking-tight text-zinc-900 transition-colors hover:bg-violet-50 hover:text-violet-900 dark:text-zinc-50 dark:hover:bg-violet-950/40 dark:hover:text-violet-100",
               sidebarHovered ? "px-2.5" : "justify-center px-0",
@@ -97,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 sidebarHovered ? "max-w-[11rem] truncate opacity-100" : "sr-only",
               )}
             >
-              AI Agent Lab
+              Founder OS
             </span>
           </Link>
         </div>
@@ -106,10 +104,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           aria-label="Main"
         >
           {navLinks.map(({ href, label, icon: Icon }) => {
-            const active =
-              href === "/dashboard"
-                ? pathname === href
-                : pathname === href || pathname.startsWith(`${href}/`);
+            const active = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
                 key={href}

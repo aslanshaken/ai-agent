@@ -11,8 +11,33 @@ import { buttonClassName } from "@/components/ui/button";
 import { listCompanyMemory } from "@/lib/memory/memory-service";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+function memoryPreviewText(m: {
+  content?: string | null;
+  content_json?: unknown;
+}): string {
+  const j = m.content_json;
+  if (
+    j &&
+    typeof j === "object" &&
+    !Array.isArray(j) &&
+    "text" in j &&
+    typeof (j as { text?: unknown }).text === "string"
+  ) {
+    return (j as { text: string }).text;
+  }
+  return typeof m.content === "string" ? m.content : "";
+}
+
 export default async function MemoryPage() {
-  let rows: { id: string; scope: string; content: string; created_at: string }[] = [];
+  let rows: {
+    id: string;
+    scope: string;
+    category?: string | null;
+    title?: string | null;
+    content: string;
+    content_json?: unknown;
+    created_at: string;
+  }[] = [];
   try {
     const supabase = await createServerSupabaseClient();
     const {
@@ -30,7 +55,7 @@ export default async function MemoryPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Memory</h1>
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-          Scoped company memory in Supabase — embeddings and pgvector come next.
+          Category-scoped rows with optional embeddings via pgvector for semantic retrieval in agents.
         </p>
       </div>
       <Card>
@@ -64,10 +89,15 @@ export default async function MemoryPage() {
                   className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800"
                 >
                   <div className="text-xs font-medium uppercase text-zinc-500">
-                    {m.scope}
+                    {m.category ?? m.scope}
                   </div>
+                  {m.title ? (
+                    <p className="mt-0.5 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                      {m.title}
+                    </p>
+                  ) : null}
                   <p className="mt-1 whitespace-pre-wrap text-zinc-800 dark:text-zinc-100">
-                    {m.content}
+                    {memoryPreviewText(m)}
                   </p>
                   <p className="mt-2 text-xs text-zinc-500">
                     {new Date(m.created_at).toLocaleString()}

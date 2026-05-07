@@ -36,6 +36,8 @@ export async function GET(req: Request) {
         trigger_run_id,
         created_at,
         completed_at,
+        source,
+        scheduled_for,
         agents ( name )
       `,
       )
@@ -60,6 +62,8 @@ export async function GET(req: Request) {
           triggerRunId: r.trigger_run_id,
           createdAt: r.created_at,
           completedAt: r.completed_at,
+          source: r.source,
+          scheduledFor: r.scheduled_for,
         };
       }) ?? [];
 

@@ -65,7 +65,8 @@ export async function PATCH(req: Request, ctx: Ctx) {
     }
 
     const status = approval.status as string;
-    const desired = parsedBody.data.status;
+    const body = parsedBody.data;
+    const desired = body.status;
 
     if (status !== "pending") {
       if (status === desired) {
@@ -114,9 +115,18 @@ export async function PATCH(req: Request, ctx: Ctx) {
       );
     }
 
+    const approvalUpdates: Record<string, unknown> = {
+      status: desired,
+      updated_at: new Date().toISOString(),
+    };
+    if (body.category !== undefined) approvalUpdates.category = body.category;
+    if (body.reviewer_note !== undefined) approvalUpdates.reviewer_note = body.reviewer_note;
+    if (body.reject_reason !== undefined) approvalUpdates.reject_reason = body.reject_reason;
+    if (body.edited_payload !== undefined) approvalUpdates.edited_payload = body.edited_payload;
+
     const { error: apprUpdateErr } = await supabase
       .from("approvals")
-      .update({ status: desired, updated_at: new Date().toISOString() })
+      .update(approvalUpdates)
       .eq("id", approvalId)
       .eq("status", "pending");
 

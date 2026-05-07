@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+export const saveToDbTargets = z.enum(["research_results", "daily_briefings"]);
+
 export const saveToDbNodeDataSchema = z.object({
-  target: z.literal("research_results").optional().default("research_results"),
+  target: saveToDbTargets.optional().default("research_results"),
   sourceNodeId: z.string().max(256).optional(),
   title: z.string().max(500).optional(),
   tags: z

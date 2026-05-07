@@ -2,19 +2,12 @@ import type { Edge, Node } from "reactflow";
 import {
   agentEdgeSchema,
   agentNodeSchema,
+  nodeTypes,
   type AgentNodeType,
 } from "@/lib/schemas/agents";
 
 function isAgentNodeType(t: string): t is AgentNodeType {
-  return [
-    "trigger",
-    "search",
-    "ai_reasoning",
-    "condition",
-    "approval",
-    "save_to_db",
-    "notification",
-  ].includes(t);
+  return (nodeTypes as readonly string[]).includes(t);
 }
 
 export function serializeFlow(nodes: Node[], edges: Edge[]) {

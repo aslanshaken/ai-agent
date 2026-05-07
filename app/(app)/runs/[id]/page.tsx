@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronDown } from "lucide-react";
 import { notFound } from "next/navigation";
 import {
   Card,
@@ -9,6 +10,9 @@ import {
 } from "@/components/ui/card";
 import { buttonClassName } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
+import { ApprovalActions } from "@/components/approvals/approval-actions";
+import { RunDetailRefresh } from "@/components/runs/run-detail-refresh";
+import { RunExecutePendingButton } from "@/components/runs/run-execute-pending-button";
 import { loadRunDetail } from "@/lib/runs/load-run";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -85,6 +89,88 @@ function isSaveToDbStepOutput(out: unknown): out is SaveToDbStepOutput {
     typeof out === "object" &&
     out !== null &&
     (out as { kind?: string }).kind === "save_to_db"
+  );
+}
+
+type CreateTaskStepOutput = { kind: "create_task"; taskId?: string; title?: string };
+type SaveCrmStepOutput = {
+  kind: "save_investor" | "save_candidate" | "save_company";
+  recordId?: string;
+  name?: string;
+};
+
+function isCreateTaskStepOutput(out: unknown): out is CreateTaskStepOutput {
+  return (
+    typeof out === "object" &&
+    out !== null &&
+    (out as { kind?: string }).kind === "create_task"
+  );
+}
+
+function isSaveCrmStepOutput(out: unknown): out is SaveCrmStepOutput {
+  const k = typeof out === "object" && out !== null ? (out as { kind?: string }).kind : null;
+  return k === "save_investor" || k === "save_candidate" || k === "save_company";
+}
+
+function CreateTaskStepSummary({ output }: { output: CreateTaskStepOutput }) {
+  return (
+    <div className="mt-3 space-y-2 rounded-md border border-lime-200/80 bg-lime-50/80 p-3 text-sm dark:border-lime-900/60 dark:bg-lime-950/30">
+      <p className="text-xs font-semibold uppercase tracking-wide text-lime-900 dark:text-lime-200">
+        Task created
+      </p>
+      <dl className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="font-medium text-zinc-500 dark:text-zinc-400">Task id</dt>
+          <dd className="font-mono text-zinc-900 dark:text-zinc-100">{output.taskId ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-zinc-500 dark:text-zinc-400">Title</dt>
+          <dd className="text-zinc-900 dark:text-zinc-100">{output.title ?? "—"}</dd>
+        </div>
+      </dl>
+      <Link href="/dashboard" className="inline-block text-xs font-medium text-lime-900 underline dark:text-lime-200">
+        View dashboard tasks →
+      </Link>
+    </div>
+  );
+}
+
+function SaveCrmStepSummary({ output }: { output: SaveCrmStepOutput }) {
+  const label =
+    output.kind === "save_investor"
+      ? "Investor"
+      : output.kind === "save_candidate"
+        ? "Candidate"
+        : "Company";
+  const border =
+    output.kind === "save_investor"
+      ? "border-indigo-200/80 bg-indigo-50/80 dark:border-indigo-900/60 dark:bg-indigo-950/30"
+      : output.kind === "save_candidate"
+        ? "border-rose-200/80 bg-rose-50/80 dark:border-rose-900/60 dark:bg-rose-950/30"
+        : "border-slate-200/80 bg-slate-50/80 dark:border-slate-700/60 dark:bg-slate-950/30";
+  const titleCls =
+    output.kind === "save_investor"
+      ? "text-indigo-900 dark:text-indigo-200"
+      : output.kind === "save_candidate"
+        ? "text-rose-900 dark:text-rose-200"
+        : "text-slate-900 dark:text-slate-200";
+
+  return (
+    <div className={cn("mt-3 space-y-2 rounded-md border p-3 text-sm", border)}>
+      <p className={cn("text-xs font-semibold uppercase tracking-wide", titleCls)}>
+        {label} saved
+      </p>
+      <dl className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
+        <div>
+          <dt className="font-medium text-zinc-500 dark:text-zinc-400">Record id</dt>
+          <dd className="font-mono text-zinc-900 dark:text-zinc-100">{output.recordId ?? "—"}</dd>
+        </div>
+        <div>
+          <dt className="font-medium text-zinc-500 dark:text-zinc-400">Name</dt>
+          <dd className="text-zinc-900 dark:text-zinc-100">{output.name ?? "—"}</dd>
+        </div>
+      </dl>
+    </div>
   );
 }
 
@@ -266,6 +352,72 @@ function stepBadgeClass(status: string) {
   }
 }
 
+function extractOutputsMap(
+  runOutput: unknown,
+): Record<string, Record<string, unknown>> | null {
+  if (!runOutput || typeof runOutput !== "object" || Array.isArray(runOutput)) return null;
+  const raw = (runOutput as Record<string, unknown>).outputsByNodeId;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const out: Record<string, Record<string, unknown>> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (v && typeof v === "object" && !Array.isArray(v)) out[k] = v as Record<string, unknown>;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function pickPrimarySummaryFromRun(
+  runOutput: unknown,
+  steps: { output: unknown }[],
+): { headline: string | null; actionItems: string[] } {
+  const actionItems: string[] = [];
+
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const o = steps[i]?.output;
+    if (isAiReasoningStepOutput(o) && o.summary?.trim()) {
+      const items = Array.isArray(o.actionItems)
+        ? o.actionItems.filter((x): x is string => typeof x === "string")
+        : [];
+      for (const it of items.slice(0, 10)) actionItems.push(it);
+      return { headline: o.summary!.trim(), actionItems };
+    }
+  }
+
+  const map = extractOutputsMap(runOutput);
+  if (map) {
+    for (const val of Object.values(map)) {
+      if (
+        val.kind === "ai_reasoning" &&
+        typeof val.summary === "string" &&
+        val.summary.trim()
+      ) {
+        return { headline: val.summary.trim(), actionItems };
+      }
+    }
+  }
+
+  if (runOutput && typeof runOutput === "object" && !Array.isArray(runOutput)) {
+    const s = (runOutput as Record<string, unknown>).summary;
+    if (typeof s === "string" && s.trim()) {
+      return { headline: s.trim(), actionItems };
+    }
+  }
+
+  return { headline: null, actionItems };
+}
+
+function pickSearchHighlight(steps: { output: unknown }[]): string | null {
+  for (let i = steps.length - 1; i >= 0; i--) {
+    const o = steps[i]?.output;
+    if (isSearchStepOutput(o)) {
+      const n = typeof o.resultCount === "number" ? o.resultCount : 0;
+      const q = (o.query ?? "").trim();
+      const short = q.length > 100 ? `${q.slice(0, 100)}…` : q;
+      return `Retrieved ${n} result${n === 1 ? "" : "s"}${short ? ` · ${short}` : ""}`;
+    }
+  }
+  return null;
+}
+
 export default async function RunDetailPage(props: PageProps) {
   const { id } = await props.params;
   let detail: Awaited<ReturnType<typeof loadRunDetail>> = null;
@@ -291,12 +443,26 @@ export default async function RunDetailPage(props: PageProps) {
 
   if (!detail) notFound();
 
+  const runMeta = detail.run as typeof detail.run & {
+    source?: string;
+    scheduled_for?: string | null;
+  };
+
   const agents = detail.run.agents as { name: string } | { name: string }[] | null;
   const agentName = Array.isArray(agents) ? agents[0]?.name : agents?.name;
   const runStatus = detail.run.status as string;
 
+  const { headline: rawHeadline, actionItems: resultActionItems } = pickPrimarySummaryFromRun(
+    detail.run.output,
+    detail.steps,
+  );
+  const searchHighlight = pickSearchHighlight(detail.steps);
+  const resultHeadline =
+    rawHeadline && rawHeadline !== "Execution finished." ? rawHeadline : null;
+
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-5 pb-8">
+      <RunDetailRefresh status={runStatus} />
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
@@ -322,153 +488,349 @@ export default async function RunDetailPage(props: PageProps) {
             ) : null}
           </div>
         </div>
-        <Link href="/runs" className={buttonClassName("outline", "sm")}>
-          All runs
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          {(detail.run as { agent_id?: string }).agent_id ? (
+            <Link
+              href={`/agents/${(detail.run as { agent_id: string }).agent_id}`}
+              className={buttonClassName("outline", "sm")}
+            >
+              Open agent
+            </Link>
+          ) : null}
+          <Link href="/runs" className={buttonClassName("outline", "sm")}>
+            All runs
+          </Link>
+        </div>
       </div>
 
       {runStatus === "waiting_for_approval" ? (
         <Card className="border-amber-300 dark:border-amber-800">
           <CardHeader>
-            <CardTitle className="text-base">Waiting for human approval</CardTitle>
+            <CardTitle className="text-base">
+              {pendingApprovalId ? "Approve to continue this run" : "Waiting for human approval"}
+            </CardTitle>
             <CardDescription>
-              Approve or reject this gate in the Approvals inbox. The run will resume or cancel
-              automatically.
+              {pendingApprovalId
+                ? "Resolve the gate below — the run resumes or stops immediately."
+                : "No pending approval row found for this run. Open the inbox if the run is stuck."}
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Link href="/approvals" className={buttonClassName("default", "sm")}>
-              Open approvals
-            </Link>
+          <CardContent className="space-y-4">
             {pendingApprovalId ? (
-              <Link
-                href={`/approvals#approval-${pendingApprovalId}`}
-                className={buttonClassName("outline", "sm")}
-              >
-                Jump to pending item
-              </Link>
+              <ApprovalActions approvalId={pendingApprovalId} runId={id} />
             ) : null}
+            <div className="flex flex-wrap gap-2 border-t border-amber-200/60 pt-4 dark:border-amber-900/50">
+              <Link href="/approvals" className={buttonClassName("outline", "sm")}>
+                Open approvals inbox
+              </Link>
+              {pendingApprovalId ? (
+                <Link
+                  href={`/approvals#approval-${pendingApprovalId}`}
+                  className={buttonClassName("ghost", "sm")}
+                >
+                  Jump to item in list
+                </Link>
+              ) : null}
+            </div>
           </CardContent>
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Timeline</CardTitle>
-          <CardDescription>
-            Started {detail.run.started_at ? new Date(detail.run.started_at).toLocaleString() : "—"}{" "}
-            · Created {new Date(detail.run.created_at).toLocaleString()}
+      <section
+        className={cn(
+          "relative overflow-hidden rounded-2xl border-2 p-6 shadow-md",
+          runStatus === "failed"
+            ? "border-red-400/40 bg-gradient-to-br from-red-50 via-white to-zinc-50 dark:border-red-800/60 dark:from-red-950/45 dark:via-zinc-950 dark:to-zinc-950"
+            : "border-emerald-500/30 bg-gradient-to-br from-emerald-50/95 via-white to-violet-50/80 dark:border-emerald-500/25 dark:from-emerald-950/35 dark:via-zinc-950 dark:to-violet-950/25",
+        )}
+      >
+        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800 dark:text-emerald-200">
+          Results
+        </p>
+
+        {runStatus === "failed" ? (
+          <div className="mt-2 space-y-2">
+            <h2 className="text-xl font-semibold tracking-tight text-red-900 dark:text-red-100">
+              Run failed
+            </h2>
+            {detail.run.error ? (
+              <p className="text-base leading-relaxed text-red-800 dark:text-red-200">
+                {detail.run.error}
+              </p>
+            ) : (
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">No error message was recorded.</p>
+            )}
+          </div>
+        ) : null}
+
+        {runStatus === "pending" ? (
+          <div className="mt-3 space-y-4">
+            {detail.run.trigger_run_id ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-950 dark:border-amber-900/80 dark:bg-amber-950/35 dark:text-amber-100">
+                Queued on Trigger.dev — this page refreshes while pending. On non-Vercel hosts, new runs
+                usually execute inline; see <span className="font-mono text-[0.7rem]">.env.example</span>.
+                Use <strong>Execute run now</strong> below if stuck.
+              </p>
+            ) : (
+              <p className="text-sm text-zinc-600 dark:text-zinc-400">Waiting to start…</p>
+            )}
+            <RunExecutePendingButton runId={id} />
+          </div>
+        ) : null}
+
+        {runStatus === "running" ? (
+          <p className="mt-3 text-base text-zinc-700 dark:text-zinc-300">
+            Run in progress… this page refreshes automatically.
+          </p>
+        ) : null}
+
+        {(runStatus === "completed" || runStatus === "waiting_for_approval") && resultHeadline ? (
+          <div className="mt-3 space-y-4">
+            <p className="text-lg font-semibold leading-snug text-zinc-900 dark:text-zinc-50 md:text-xl">
+              {resultHeadline}
+            </p>
+            {searchHighlight ? (
+              <p className="text-sm font-medium text-emerald-900/90 dark:text-emerald-100/90">
+                {searchHighlight}
+              </p>
+            ) : null}
+            {resultActionItems.length > 0 ? (
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  Action items
+                </p>
+                <ul className="space-y-2 border-l-2 border-emerald-500/50 pl-4 text-sm leading-relaxed text-zinc-800 dark:text-zinc-200">
+                  {resultActionItems.map((item, i) => (
+                    <li key={i}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {(runStatus === "completed" || runStatus === "waiting_for_approval") &&
+        !resultHeadline &&
+        searchHighlight ? (
+          <p className="mt-3 text-lg font-semibold leading-snug text-zinc-900 dark:text-zinc-50 md:text-xl">
+            {searchHighlight}
+          </p>
+        ) : null}
+
+        {(runStatus === "completed" || runStatus === "waiting_for_approval") &&
+        !resultHeadline &&
+        !searchHighlight ? (
+          <p className="mt-3 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+            Run finished — open <strong>Steps</strong> below for each node&apos;s output and raw JSON.
+          </p>
+        ) : null}
+
+        {detail.metrics &&
+        (detail.metrics.duration_ms != null ||
+          detail.metrics.total_tokens != null ||
+          detail.metrics.total_cost != null) &&
+        runStatus !== "pending" &&
+        runStatus !== "failed" ? (
+          <dl className="mt-5 flex flex-wrap gap-x-6 gap-y-2 border-t border-emerald-200/50 pt-4 text-xs dark:border-emerald-900/40">
+            {detail.metrics.duration_ms != null ? (
+              <div>
+                <dt className="font-medium text-zinc-500 dark:text-zinc-400">Duration</dt>
+                <dd className="tabular-nums text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {detail.metrics.duration_ms} ms
+                </dd>
+              </div>
+            ) : null}
+            {detail.metrics.total_tokens != null ? (
+              <div>
+                <dt className="font-medium text-zinc-500 dark:text-zinc-400">Tokens</dt>
+                <dd className="tabular-nums text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {detail.metrics.total_tokens}
+                </dd>
+              </div>
+            ) : null}
+            {detail.metrics.total_cost != null ? (
+              <div>
+                <dt className="font-medium text-zinc-500 dark:text-zinc-400">Est. cost</dt>
+                <dd className="tabular-nums text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                  {String(detail.metrics.total_cost)}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        ) : null}
+      </section>
+
+      <details className="group rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <summary
+          className={cn(
+            "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-zinc-900 outline-none transition hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900",
+            "[&::-webkit-details-marker]:hidden",
+          )}
+        >
+          <span>Execution &amp; timeline</span>
+          <ChevronDown
+            className="size-4 shrink-0 text-zinc-400 transition-transform duration-200 group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="border-t border-zinc-200 px-4 py-4 text-sm dark:border-zinc-800">
+          <p className="text-xs text-zinc-600 dark:text-zinc-400">
+            Started{" "}
+            {detail.run.started_at ? new Date(detail.run.started_at).toLocaleString() : "—"} · Created{" "}
+            {new Date(detail.run.created_at).toLocaleString()}
             {detail.run.completed_at
               ? ` · Completed ${new Date(detail.run.completed_at).toLocaleString()}`
               : null}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          {detail.run.error ? (
-            <p className="text-red-600 dark:text-red-400">{detail.run.error}</p>
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+            Source: {runMeta.source === "scheduled" ? "Scheduled" : "Manual"}
+            {runMeta.source === "scheduled" && runMeta.scheduled_for
+              ? ` · scheduled for ${new Date(runMeta.scheduled_for).toLocaleString()}`
+              : null}
+          </p>
+          {detail.run.error && runStatus !== "failed" ? (
+            <p className="mt-3 text-sm text-red-600 dark:text-red-400">{detail.run.error}</p>
           ) : null}
           {detail.run.trigger_run_id ? (
-            <p className="text-xs text-zinc-500">
+            <p className="mt-3 font-mono text-xs text-zinc-500">
               Trigger.dev: {detail.run.trigger_run_id}
             </p>
           ) : null}
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       {detail.run.output && typeof detail.run.output === "object" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>Run output</CardTitle>
-            <CardDescription>Aggregated result JSON from the executor.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <pre className="max-h-64 overflow-auto rounded-md bg-zinc-950 p-4 text-xs text-zinc-100">
+        <details className="group rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <summary
+            className={cn(
+              "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-zinc-900 outline-none transition hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900",
+              "[&::-webkit-details-marker]:hidden",
+            )}
+          >
+            <span>Aggregated run output (JSON)</span>
+            <ChevronDown
+              className="size-4 shrink-0 text-zinc-400 transition-transform duration-200 group-open:rotate-180"
+              aria-hidden
+            />
+          </summary>
+          <div className="border-t border-zinc-200 p-4 dark:border-zinc-800">
+            <pre className="max-h-72 overflow-auto rounded-lg bg-zinc-950 p-4 text-xs text-zinc-100">
               {JSON.stringify(detail.run.output, null, 2)}
             </pre>
-          </CardContent>
-        </Card>
+          </div>
+        </details>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Steps</CardTitle>
-          <CardDescription>
-            Order, node type, status, JSON output, and errors (topological execution).
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+      <details open className="group rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <summary
+          className={cn(
+            "flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-semibold text-zinc-900 outline-none transition hover:bg-zinc-50 dark:text-zinc-100 dark:hover:bg-zinc-900",
+            "[&::-webkit-details-marker]:hidden",
+          )}
+        >
+          <span>Steps ({detail.steps.length})</span>
+          <ChevronDown
+            className="size-4 shrink-0 text-zinc-400 transition-transform duration-200 group-open:rotate-180"
+            aria-hidden
+          />
+        </summary>
+        <div className="border-t border-zinc-200 px-4 py-4 dark:border-zinc-800">
+          <p className="mb-4 text-xs text-zinc-500 dark:text-zinc-400">
+            Topological order — structured summaries first; expand each step for raw JSON.
+          </p>
           {detail.steps.length === 0 ? (
             <p className="text-sm text-zinc-500">No steps recorded.</p>
           ) : (
-            <ol className="space-y-4">
+            <ol className="space-y-3">
               {detail.steps.map((s) => (
-                <li
-                  key={s.id}
-                  className={cn(
-                    "rounded-lg border p-4",
-                    stepBadgeClass(s.status),
-                  )}
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                        Step order
-                      </p>
-                      <p className="text-lg font-semibold tabular-nums">#{s.step_index}</p>
-                    </div>
-                    <div className="text-right text-sm">
-                      <p className="font-medium capitalize">{s.node_type ?? "?"}</p>
-                      <p className="font-mono text-xs text-zinc-600 dark:text-zinc-400">
-                        {s.node_id}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">
-                      Status
-                    </span>
-                    <span
+                <li key={s.id}>
+                  <details
+                    className={cn(
+                      "group rounded-lg border transition-colors",
+                      stepBadgeClass(s.status),
+                    )}
+                  >
+                    <summary
                       className={cn(
-                        "rounded-md px-2 py-0.5 text-xs font-semibold capitalize",
-                        statusBadgeClass(s.status),
+                        "flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium",
+                        "[&::-webkit-details-marker]:hidden",
                       )}
                     >
-                      {String(s.status).replace(/_/g, " ")}
-                    </span>
-                  </div>
-                  {s.output && typeof s.output === "object" ? (
-                    <div className="mt-3">
-                      {isSearchStepOutput(s.output) ? (
-                        <SearchStepSummary output={s.output} />
-                      ) : null}
-                      {isAiReasoningStepOutput(s.output) ? (
-                        <AiReasoningStepSummary output={s.output} />
-                      ) : null}
-                      {isSaveToDbStepOutput(s.output) ? (
-                        <SaveToDbStepSummary output={s.output} />
-                      ) : null}
-                      <p className="mb-1 mt-3 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                        Output (JSON)
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="tabular-nums text-zinc-600 dark:text-zinc-400">
+                          #{s.step_index}
+                        </span>
+                        <span className="capitalize">{s.node_type ?? "?"}</span>
+                        <span
+                          className={cn(
+                            "rounded-md px-2 py-0.5 text-xs font-semibold capitalize",
+                            statusBadgeClass(s.status),
+                          )}
+                        >
+                          {String(s.status).replace(/_/g, " ")}
+                        </span>
+                      </span>
+                      <ChevronDown
+                        className="size-4 shrink-0 text-zinc-500 transition-transform duration-200 group-open:rotate-180"
+                        aria-hidden
+                      />
+                    </summary>
+                    <div className="space-y-3 border-t border-black/5 px-3 py-3 dark:border-white/10">
+                      <p className="font-mono text-[11px] text-zinc-500 dark:text-zinc-400">
+                        {s.node_id}
                       </p>
-                      <pre className="max-h-48 overflow-auto rounded-md bg-black/5 p-3 text-xs dark:bg-black/30">
-                        {JSON.stringify(s.output, null, 2)}
-                      </pre>
+                      {s.output && typeof s.output === "object" ? (
+                        <div className="space-y-3">
+                          {isSearchStepOutput(s.output) ? (
+                            <SearchStepSummary output={s.output} />
+                          ) : null}
+                          {isAiReasoningStepOutput(s.output) ? (
+                            <AiReasoningStepSummary output={s.output} />
+                          ) : null}
+                          {isSaveToDbStepOutput(s.output) ? (
+                            <SaveToDbStepSummary output={s.output} />
+                          ) : null}
+                          {isCreateTaskStepOutput(s.output) ? (
+                            <CreateTaskStepSummary output={s.output} />
+                          ) : null}
+                          {isSaveCrmStepOutput(s.output) ? (
+                            <SaveCrmStepSummary output={s.output} />
+                          ) : null}
+                          <details className="group/json rounded-md border border-zinc-200 bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-900/50">
+                            <summary
+                              className={cn(
+                                "flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-xs font-medium text-zinc-600 dark:text-zinc-400",
+                                "[&::-webkit-details-marker]:hidden",
+                              )}
+                            >
+                              <span>Raw output (JSON)</span>
+                              <ChevronDown
+                                className="size-3.5 shrink-0 transition-transform duration-200 group-open/json:rotate-180"
+                                aria-hidden
+                              />
+                            </summary>
+                            <pre className="max-h-40 overflow-auto border-t border-zinc-200 p-3 text-[11px] dark:border-zinc-700">
+                              {JSON.stringify(s.output, null, 2)}
+                            </pre>
+                          </details>
+                        </div>
+                      ) : null}
+                      {s.error ? (
+                        <p className="text-sm font-medium text-red-700 dark:text-red-300">
+                          Error: {s.error}
+                        </p>
+                      ) : null}
+                      <p className="text-[11px] text-zinc-500">
+                        Logged {new Date(s.created_at).toLocaleString()}
+                      </p>
                     </div>
-                  ) : null}
-                  {s.error ? (
-                    <p className="mt-2 text-sm font-medium text-red-700 dark:text-red-300">
-                      Error: {s.error}
-                    </p>
-                  ) : null}
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Logged {new Date(s.created_at).toLocaleString()}
-                  </p>
+                  </details>
                 </li>
               ))}
             </ol>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </details>
     </div>
   );
 }

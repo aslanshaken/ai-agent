@@ -3,11 +3,17 @@ import { z } from "zod";
 export const nodeTypes = [
   "trigger",
   "search",
+  "aggregate_results",
   "ai_reasoning",
+  "priority_ranker",
   "condition",
   "approval",
   "save_to_db",
   "notification",
+  "create_task",
+  "save_investor",
+  "save_candidate",
+  "save_company",
 ] as const;
 
 export type AgentNodeType = (typeof nodeTypes)[number];
@@ -32,12 +38,16 @@ export const createAgentBodySchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   mission: z.string().max(8000).optional(),
+  memory_categories: z.array(z.string().max(120)).max(40).optional(),
+  permission_profile: z.record(z.string(), z.unknown()).optional(),
   nodes: z.array(agentNodeSchema).default([]),
   edges: z.array(agentEdgeSchema).default([]),
 });
 
 export const updateAgentBodySchema = createAgentBodySchema.partial().extend({
   name: z.string().min(1).max(200).optional(),
+  memory_categories: z.array(z.string().max(120)).max(40).optional(),
+  permission_profile: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type CreateAgentBody = z.infer<typeof createAgentBodySchema>;

@@ -51,6 +51,10 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  if (pathname === "/" && user) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
+  }
+
   if (pathname.startsWith("/login") && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }

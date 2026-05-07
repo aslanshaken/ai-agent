@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgentNodeType } from "@/lib/schemas/agents";
 import type { GraphEdgeRow } from "@/lib/agents/execute-graph";
+import type { PermissionProfile } from "@/lib/agents/permission-profile";
 
 export type ExecutionNode = {
   react_flow_id: string;
@@ -24,6 +25,10 @@ export type ExecutorRuntime = {
   edges: GraphEdgeRow[];
   /** Topo order for this run — stored on approval payload for resume/debug */
   executionPlan: ExecutionPlanSnapshot | null;
+  /** Categories allowed for semantic memory retrieval (Phase 10). */
+  memoryCategories: string[];
+  /** Governance JSON from `agents.permission_profile` (Phase 17). */
+  permissionProfile: PermissionProfile;
 };
 
 export type ExecutorInput = {

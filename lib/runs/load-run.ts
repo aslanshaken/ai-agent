@@ -15,6 +15,9 @@ export async function loadRunDetail(supabase: SupabaseClient, runId: string) {
       created_at,
       started_at,
       completed_at,
+      source,
+      schedule_id,
+      scheduled_for,
       agents ( name )
     `,
     )
@@ -29,10 +32,15 @@ export async function loadRunDetail(supabase: SupabaseClient, runId: string) {
     .eq("run_id", runId)
     .order("step_index", { ascending: true });
 
-  // Still return the run if steps fail (e.g. transient); UI shows empty steps.
-  if (stepErr) {
-    return { run, steps: [] };
-  }
+  const { data: metrics, error: metricsErr } = await supabase
+    .from("agent_run_metrics")
+    .select("duration_ms, total_tokens, total_cost, provider_breakdown")
+    .eq("run_id", runId)
+    .maybeSingle();
 
-  return { run, steps: steps ?? [] };
+  return {
+    run,
+    steps: stepErr ? [] : (steps ?? []),
+    metrics: metricsErr ? null : metrics ?? null,
+  };
 }

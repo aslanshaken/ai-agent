@@ -53,6 +53,7 @@ export async function POST(_req: Request, ctx: Ctx) {
         agent_id: agentId,
         version_id: version.id,
         status: "pending",
+        source: "manual",
       })
       .select("id")
       .single();

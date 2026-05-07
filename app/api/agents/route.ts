@@ -48,14 +48,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const insertRow: Record<string, unknown> = {
+      user_id: user.id,
+      name: body.name,
+      description: body.description ?? null,
+      mission: body.mission ?? null,
+    };
+    if (body.memory_categories !== undefined) {
+      insertRow.memory_categories = body.memory_categories;
+    }
+    if (body.permission_profile !== undefined) {
+      insertRow.permission_profile = body.permission_profile;
+    }
+
     const { data: agent, error: agentErr } = await supabase
       .from("agents")
-      .insert({
-        user_id: user.id,
-        name: body.name,
-        description: body.description ?? null,
-        mission: body.mission ?? null,
-      })
+      .insert(insertRow)
       .select("id")
       .single();
 

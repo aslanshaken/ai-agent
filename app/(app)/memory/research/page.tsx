@@ -27,10 +27,14 @@ export default async function ResearchMemoryPage() {
   let rows: ResearchRow[] = [];
   try {
     const supabase = await createServerSupabaseClient();
-    const { data } = await supabase
-      .from("research_results")
-      .select(
-        `
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data } = await supabase
+        .from("research_results")
+        .select(
+          `
         id,
         title,
         summary,
@@ -43,10 +47,12 @@ export default async function ResearchMemoryPage() {
         result,
         agents ( name )
       `,
-      )
-      .order("created_at", { ascending: false })
-      .limit(100);
-    rows = (data as ResearchRow[]) ?? [];
+        )
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      rows = (data as ResearchRow[]) ?? [];
+    }
   } catch {
     rows = [];
   }
@@ -71,10 +77,18 @@ export default async function ResearchMemoryPage() {
           <CardHeader>
             <CardTitle>No research saves yet</CardTitle>
             <CardDescription>
-              Run an agent that includes a save_to_db node after search / reasoning (and approval if
-              configured). Results appear here automatically.
+              Run an agent whose graph ends with <span className="font-mono text-xs">save_to_db</span>{" "}
+              pointing at research results. Investor and intel templates do this after approval.
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Link href="/agents" className={buttonClassName("default", "sm")}>
+              Open agents
+            </Link>
+            <Link href="/agents/new" className={buttonClassName("outline", "sm")}>
+              New agent
+            </Link>
+          </CardContent>
         </Card>
       ) : (
         <ul className="space-y-4">

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -5,6 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { buttonClassName } from "@/components/ui/button";
 import { RunStatusCard } from "@/components/runs/run-status-card";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -18,30 +20,47 @@ export default async function RunsPage() {
     trigger_run_id: string | null;
     created_at: string;
     completed_at: string | null;
+    source?: string | null;
+    scheduled_for?: string | null;
     agents: { name: string } | { name: string }[] | null;
   };
 
   let runs: RunRow[] = [];
   try {
     const supabase = await createServerSupabaseClient();
-    const { data } = await supabase
-      .from("agent_runs")
-      .select(
-        `
-        id,
-        agent_id,
-        status,
-        output,
-        error,
-        trigger_run_id,
-        created_at,
-        completed_at,
-        agents ( name )
-      `,
-      )
-      .order("created_at", { ascending: false })
-      .limit(50);
-    runs = (data as unknown as RunRow[]) ?? [];
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const { data: agentRows } = await supabase
+        .from("agents")
+        .select("id")
+        .eq("user_id", user.id);
+      const agentIds = (agentRows ?? []).map((r) => r.id as string);
+      if (agentIds.length > 0) {
+        const { data } = await supabase
+          .from("agent_runs")
+          .select(
+            `
+            id,
+            agent_id,
+            status,
+            output,
+            error,
+            trigger_run_id,
+            created_at,
+            completed_at,
+            source,
+            scheduled_for,
+            agents ( name )
+          `,
+          )
+          .in("agent_id", agentIds)
+          .order("created_at", { ascending: false })
+          .limit(50);
+        runs = (data as unknown as RunRow[]) ?? [];
+      }
+    }
   } catch {
     runs = [];
   }
@@ -59,13 +78,24 @@ export default async function RunsPage() {
           <CardHeader>
             <CardTitle>No runs yet</CardTitle>
             <CardDescription>
-              Open an agent and use Run now — dummy execution completes immediately in local
-              mode.
+              Open one of your agents and press <span className="font-medium">Run now</span> to test
+              the workflow. You&apos;ll land on the run detail page to approve or review steps.
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Link href="/agents" className={buttonClassName("default", "sm")}>
+              Go to agents
+            </Link>
+            <Link
+              href="/agents/new?template=founder-daily-briefing"
+              className={buttonClassName("outline", "sm")}
+            >
+              Create briefing agent
+            </Link>
+          </CardContent>
         </Card>
       ) : (
-        <ul className="space-y-3">
+        <ul className="space-y-2">
           {runs.map((r) => {
             const agentRel = r.agents;
             const agentName = Array.isArray(agentRel)
@@ -82,6 +112,8 @@ export default async function RunsPage() {
                 error={r.error}
                 output={r.output}
                 triggerRunId={r.trigger_run_id}
+                source={r.source}
+                scheduledFor={r.scheduled_for}
               />
             </li>
             );

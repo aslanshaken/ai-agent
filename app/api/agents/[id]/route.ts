@@ -39,7 +39,9 @@ export async function GET(_req: Request, ctx: Ctx) {
 
     const { data: agent, error: aErr } = await supabase
       .from("agents")
-      .select("id, name, description, mission, updated_at")
+      .select(
+        "id, name, description, mission, memory_categories, permission_profile, updated_at",
+      )
       .eq("id", id)
       .eq("user_id", user.id)
       .single();
@@ -136,6 +138,9 @@ export async function PATCH(req: Request, ctx: Ctx) {
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
     if (body.mission !== undefined) updates.mission = body.mission;
+    if (body.memory_categories !== undefined) updates.memory_categories = body.memory_categories;
+    if (body.permission_profile !== undefined)
+      updates.permission_profile = body.permission_profile;
 
     if (Object.keys(updates).length > 1) {
       const { error: uErr } = await supabase

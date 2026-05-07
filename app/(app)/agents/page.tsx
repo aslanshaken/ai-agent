@@ -47,23 +47,35 @@ export default async function AgentsPage() {
           <CardHeader>
             <CardTitle>No agents yet</CardTitle>
             <CardDescription>
-              Connect Supabase and sign in, then create your first visual workflow.
+              Start with the Founder Daily Briefing blueprint — search, synthesize, rank, approve,
+              and save your morning digest.
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Link
+              href="/agents/new?template=founder-daily-briefing"
+              className={buttonClassName("default", "sm")}
+            >
+              Founder Daily Briefing
+            </Link>
+            <Link href="/agents/new" className={buttonClassName("outline", "sm")}>
+              Other templates
+            </Link>
+          </CardContent>
         </Card>
       ) : (
-        <ul className="grid gap-3 md:grid-cols-2">
+        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((a) => (
             <li key={a.id}>
               <Link href={`/agents/${a.id}`}>
                 <Card className="transition-colors hover:border-zinc-400 dark:hover:border-zinc-600">
-                  <CardHeader>
-                    <CardTitle className="text-base">{a.name}</CardTitle>
-                    <CardDescription className="line-clamp-2">
+                  <CardHeader className="space-y-1 p-4 pb-2">
+                    <CardTitle className="text-sm font-semibold leading-snug">{a.name}</CardTitle>
+                    <CardDescription className="line-clamp-2 text-xs leading-snug">
                       {a.description || "No description"}
                     </CardDescription>
                   </CardHeader>
-                  <CardContent className="text-xs text-zinc-500">
+                  <CardContent className="px-4 pb-3 pt-0 text-[11px] leading-tight text-zinc-500">
                     Updated {new Date(a.updated_at).toLocaleString()}
                   </CardContent>
                 </Card>

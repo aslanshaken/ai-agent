@@ -73,9 +73,18 @@ export default async function ApprovalsPage() {
           <CardHeader>
             <CardTitle>Inbox empty</CardTitle>
             <CardDescription>
-              When a workflow hits an approval node, the run pauses and a row appears here.
+              Runs pause at approval nodes until you approve or reject. Create an agent that includes
+              an approval step (the briefing template does).
             </CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Link href="/agents/new?template=founder-daily-briefing" className={buttonClassName("default", "sm")}>
+              Briefing template
+            </Link>
+            <Link href="/runs" className={buttonClassName("outline", "sm")}>
+              View runs
+            </Link>
+          </CardContent>
         </Card>
       ) : (
         <ul className="space-y-3">

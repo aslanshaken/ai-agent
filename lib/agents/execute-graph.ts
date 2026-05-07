@@ -52,9 +52,15 @@ export function orderNodesForExecution<T extends GraphNodeRow>(
     incoming.set(e.target_node, (incoming.get(e.target_node) ?? 0) + 1);
   }
 
+  // Stable fan-out: when one node connects to several targets, run those branches in a fixed order.
+  for (const list of adj.values()) {
+    list.sort((a, b) => a.localeCompare(b));
+  }
+
   const queue = nodes
     .map((n) => n.react_flow_id)
     .filter((id) => (incoming.get(id) ?? 0) === 0);
+  queue.sort((a, b) => a.localeCompare(b));
   const orderedIds: string[] = [];
 
   while (queue.length) {
