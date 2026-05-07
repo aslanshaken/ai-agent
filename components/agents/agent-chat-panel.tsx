@@ -122,14 +122,13 @@ export function AgentChatPanel({
         {timelineSteps.length > 0 || runStatus ? (
           <AgentRunTimeline steps={timelineSteps} runStatus={runStatus} />
         ) : null}
-
-        {approvalId ? (
-          <InlineApprovalCard
-            approvalId={approvalId}
-            onResolved={onApprovalResolved}
-          />
-        ) : null}
       </div>
+
+      {approvalId ? (
+        <div className="shrink-0 border-t border-amber-200/80 bg-amber-50/40 px-6 py-3 dark:border-amber-900/40 dark:bg-amber-950/25">
+          <InlineApprovalCard approvalId={approvalId} onResolved={onApprovalResolved} />
+        </div>
+      ) : null}
 
       <div className="sticky bottom-0 z-20 mt-3 mb-3 flex shrink-0 flex-col gap-2 px-6 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         {isProcessing ? <ChatTypingIndicator compact /> : null}

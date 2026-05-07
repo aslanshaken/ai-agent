@@ -5,8 +5,9 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { cn } from "@/lib/utils/cn";
 
+/** Wide shell — Modal portals to `document.body` so width isn’t clipped inside React Flow transforms. */
 const workflowModalShell =
-  "max-h-[min(92vh,920px)] w-full max-w-[min(96vw,56rem)] sm:max-w-[min(96vw,60rem)]";
+  "max-h-[min(92vh,920px)] w-[min(96vw,calc(100vw-2rem))] max-w-[min(96vw,72rem)] sm:max-w-[min(96vw,80rem)]";
 
 export function WorkflowExpandableTextarea({
   label,

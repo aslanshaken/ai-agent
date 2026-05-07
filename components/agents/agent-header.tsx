@@ -16,10 +16,13 @@ export function AgentHeader({
   onMemory,
   onRuns,
   onApprovals,
+  emphasizeApprovals = false,
 }: {
   name: string;
   initials: string;
   status: WorkspaceHeaderStatus;
+  /** Primary styling on Approvals — use when this run is paused for approval. */
+  emphasizeApprovals?: boolean;
   pendingApprovalsCount: number;
   onWorkflow: () => void;
   onDetails: () => void;
@@ -95,11 +98,11 @@ export function AgentHeader({
         </Button>
         <Button
           type="button"
-          variant="outline"
+          variant={emphasizeApprovals ? "default" : "outline"}
           size="sm"
           onClick={onApprovals}
           title="Approvals for this agent"
-          className="gap-1.5"
+          className={cn("gap-1.5", emphasizeApprovals && "shadow-md")}
         >
           <span>Approvals</span>
           {pendingApprovalsCount > 0 ? (

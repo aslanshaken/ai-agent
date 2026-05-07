@@ -1,13 +1,54 @@
 "use client";
 
-import { useId } from "react";
 import { Handle, Position, useReactFlow, type NodeProps } from "reactflow";
 import {
   WorkflowExpandableTextarea,
   WorkflowModalInput,
 } from "@/components/graph/workflow-expandable-text";
+import { WORKFLOW_OPENAI_MODEL_OPTIONS } from "@/lib/tools/ai/constants";
 import { cn } from "@/lib/utils/cn";
 import type { AgentNodeType } from "@/lib/schemas/agents";
+
+const workflowModelSelectClass =
+  "nodrag w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-[13px] leading-snug dark:border-zinc-600 dark:bg-zinc-900";
+
+const WORKFLOW_MODEL_DEFAULT_SENTINEL = "__workflow_default_model__";
+
+function WorkflowOpenAiModelSelect({
+  value,
+  onChange,
+  defaultLabel,
+}: {
+  value: string;
+  onChange: (next: string) => void;
+  defaultLabel: string;
+}) {
+  const known = new Set<string>(WORKFLOW_OPENAI_MODEL_OPTIONS);
+  const trimmed = value.trim();
+  const isUnknownSaved = trimmed.length > 0 && !known.has(trimmed);
+  const selectValue = trimmed === "" ? WORKFLOW_MODEL_DEFAULT_SENTINEL : value;
+
+  return (
+    <select
+      className={workflowModelSelectClass}
+      value={selectValue}
+      onChange={(e) => {
+        const v = e.target.value;
+        onChange(v === WORKFLOW_MODEL_DEFAULT_SENTINEL ? "" : v);
+      }}
+    >
+      <option value={WORKFLOW_MODEL_DEFAULT_SENTINEL}>{defaultLabel}</option>
+      {WORKFLOW_OPENAI_MODEL_OPTIONS.map((id) => (
+        <option key={id} value={id}>
+          {id}
+        </option>
+      ))}
+      {isUnknownSaved ? (
+        <option value={trimmed}>{trimmed} (saved)</option>
+      ) : null}
+    </select>
+  );
+}
 
 const styles: Record<AgentNodeType, string> = {
   trigger: "border-emerald-500/60 bg-emerald-500/10",
@@ -57,8 +98,6 @@ export function WorkflowNode(props: NodeProps) {
   const t = type as AgentNodeType;
   const label = (data?.label as string) ?? t;
   const { setNodes } = useReactFlow();
-  const modelListId = useId();
-  const priorityRankerModelListId = useId();
 
   const patchData = (patch: Record<string, unknown>) => {
     setNodes((nds) =>
@@ -170,20 +209,11 @@ export function WorkflowNode(props: NodeProps) {
             <option value="action_items">action_items</option>
           </select>
           <label className="block text-[13px] font-medium text-zinc-500">Model</label>
-          <input
-            type="text"
-            className="nodrag w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-[13px] leading-snug dark:border-zinc-600 dark:bg-zinc-900"
-            placeholder="Empty = default (gpt-4.1-mini or OPENAI_REASONING_MODEL)"
+          <WorkflowOpenAiModelSelect
             value={model}
-            onChange={(e) => patchData({ model: e.target.value })}
-            list={modelListId}
+            onChange={(next) => patchData({ model: next })}
+            defaultLabel="Default (gpt-4.1-mini or OPENAI_REASONING_MODEL)"
           />
-          <datalist id={modelListId}>
-            <option value="gpt-4.1-mini" />
-            <option value="gpt-4o-mini" />
-            <option value="gpt-4o" />
-            <option value="gpt-4.1" />
-          </datalist>
         </div>
       </div>
     );
@@ -234,19 +264,11 @@ export function WorkflowNode(props: NodeProps) {
             onChange={(v) => patchData({ instruction: v })}
           />
           <label className="block text-[13px] font-medium text-zinc-500">Model</label>
-          <input
-            type="text"
-            className="nodrag w-full rounded-md border border-zinc-300 bg-white px-2 py-1 text-[13px] leading-snug dark:border-zinc-600 dark:bg-zinc-900"
-            placeholder="Empty = default"
+          <WorkflowOpenAiModelSelect
             value={model}
-            onChange={(e) => patchData({ model: e.target.value })}
-            list={priorityRankerModelListId}
+            onChange={(next) => patchData({ model: next })}
+            defaultLabel="Default (gpt-4.1-mini or OPENAI_REASONING_MODEL)"
           />
-          <datalist id={priorityRankerModelListId}>
-            <option value="gpt-4.1-mini" />
-            <option value="gpt-4o-mini" />
-            <option value="gpt-4o" />
-          </datalist>
         </div>
       </div>
     );

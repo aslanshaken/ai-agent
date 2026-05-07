@@ -1,7 +1,5 @@
-import type { Edge, Node } from "reactflow";
-import { explainWorkflowFromGraph } from "@/lib/agents/workflow-chat-helpers";
-
-const STORAGE_VERSION = "v1";
+/** Bump when seed/migration should ignore prior localStorage (e.g. welcome copy refresh). */
+const STORAGE_VERSION = "v2";
 const STORAGE_PREFIX = `founder-os-agent-chat:${STORAGE_VERSION}`;
 const MAX_MESSAGES = 80;
 
@@ -59,26 +57,8 @@ export function saveAgentChatMessages(agentId: string, messages: StoredChatMessa
   }
 }
 
-export function buildWelcomeChatMessages(
-  agentId: string,
-  agentName: string,
-  nodes: Node[],
-  edges: Edge[],
-): StoredChatMessage[] {
-  const wf = explainWorkflowFromGraph(nodes, edges);
-  const content = [
-    `Welcome to ${agentName.trim() || "your agent"}.`,
-    "",
-    "Quick controls:",
-    "• Run agent — runs your workflow end-to-end (search, AI steps, approvals, saves).",
-    "• Workflow — edit nodes on the canvas (auto-saves).",
-    "• Details — name, description, mission.",
-    "• Runs / Approvals (header) — history and human review.",
-    "",
-    wf,
-    "",
-    'Ask anything, or type "run" to execute this workflow.',
-  ].join("\n");
+export function buildWelcomeChatMessages(agentId: string, agentName: string): StoredChatMessage[] {
+  const content = `Welcome to ${agentName.trim() || "your agent"}.`;
 
   return [
     {

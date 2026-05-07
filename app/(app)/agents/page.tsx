@@ -1,11 +1,4 @@
 import Link from "next/link";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { AgentListCard } from "@/components/agents/agent-list-card";
 import { buttonClassName } from "@/components/ui/button";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
@@ -48,28 +41,7 @@ export default async function AgentsPage() {
           </Link>
         </div>
       </div>
-      {agents.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>No agents yet</CardTitle>
-            <CardDescription>
-              Start with the Founder Daily Briefing blueprint — search, synthesize, rank, approve,
-              and save your morning digest.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-wrap gap-2">
-            <Link
-              href="/agents/new?template=founder-daily-briefing"
-              className={buttonClassName("default", "sm")}
-            >
-              Founder Daily Briefing
-            </Link>
-            <Link href="/agents/templates" className={buttonClassName("outline", "sm")}>
-              Browse templates
-            </Link>
-          </CardContent>
-        </Card>
-      ) : (
+      {agents.length > 0 ? (
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {agents.map((a) => (
             <li key={a.id}>
@@ -82,7 +54,7 @@ export default async function AgentsPage() {
             </li>
           ))}
         </ul>
-      )}
+      ) : null}
     </div>
   );
 }

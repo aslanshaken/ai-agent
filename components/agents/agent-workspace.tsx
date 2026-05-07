@@ -45,12 +45,7 @@ type RunPollPayload = {
   steps: TimelineStep[];
 };
 
-const POLL_STOP = new Set([
-  "completed",
-  "failed",
-  "cancelled",
-  "waiting_for_approval",
-]);
+const POLL_STOP = new Set(["completed", "failed", "cancelled"]);
 
 function digestFields(p: {
   name: string;
@@ -160,12 +155,7 @@ export function AgentWorkspace({
     setMessages(
       stored?.length
         ? stored
-        : buildWelcomeChatMessages(
-            agentId,
-            initial?.name ?? "Agent",
-            initial?.nodes ?? [],
-            initial?.edges ?? [],
-          ),
+        : buildWelcomeChatMessages(agentId, initial?.name ?? "Agent"),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- welcome seed uses `initial` from this agent mount only.
   }, [agentId]);
@@ -176,7 +166,6 @@ export function AgentWorkspace({
   }, [messages, agentId]);
 
   const [pollRunId, setPollRunId] = useState<string | null>(null);
-  const [approvalPause, setApprovalPause] = useState(false);
   const [pendingApprovalId, setPendingApprovalId] = useState<string | null>(null);
   const [runPoll, setRunPoll] = useState<RunPollPayload | null>(null);
   const lastPollRef = useRef<RunPollPayload | null>(null);
@@ -306,8 +295,11 @@ export function AgentWorkspace({
           riskLevel,
         });
         lastSaved.current.graph = JSON.stringify(snap);
-        if (showBanner) setMessage("Saved.");
-        router.refresh();
+        if (showBanner) {
+          setMessage("Saved.");
+          /** Silent workflow autosave must not refresh — each refresh remounts the page and feels broken. */
+          router.refresh();
+        }
         return { ok: true };
       } catch (e) {
         const err = e instanceof Error ? e.message : "Save failed";
@@ -348,7 +340,6 @@ export function AgentWorkspace({
         }
         lastPollRef.current = null;
         setPollRunId(rid);
-        setApprovalPause(false);
         setPendingApprovalId(null);
         setRunPoll(null);
       } catch (e) {
@@ -364,7 +355,7 @@ export function AgentWorkspace({
   );
 
   useEffect(() => {
-    if (!pollRunId || approvalPause) return;
+    if (!pollRunId) return;
 
     let cancelled = false;
 
@@ -391,9 +382,8 @@ export function AgentWorkspace({
         }
 
         if (st === "waiting_for_approval") {
+          setPendingApprovalId(data.pendingApproval?.id ?? null);
           if (prevSt !== "waiting_for_approval") {
-            setApprovalPause(true);
-            setPendingApprovalId(data.pendingApproval?.id ?? null);
             appendChat({
               role: "assistant",
               content: "Waiting for approval.",
@@ -404,7 +394,7 @@ export function AgentWorkspace({
 
         if (st !== prevSt && POLL_STOP.has(st)) {
           setPollRunId(null);
-          setApprovalPause(false);
+          setPendingApprovalId(null);
           if (st === "completed") {
             appendChat({
               role: "assistant",
@@ -434,7 +424,7 @@ export function AgentWorkspace({
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [pollRunId, approvalPause, appendChat]);
+  }, [pollRunId, appendChat]);
 
   const resolveLatestRunSummary = useCallback(async (): Promise<string> => {
     if (runPoll?.run.id) {
@@ -484,16 +474,7 @@ export function AgentWorkspace({
         case "explain_workflow":
           appendChat({
             role: "assistant",
-            content: [
-              explainWorkflowFromGraph(snap.nodes, snap.edges),
-              "",
-              "In this workspace:",
-              "• Run agent — runs the full workflow (search, AI steps, approval, saves).",
-              "• Workflow — edit nodes and queries on the canvas (auto-saves).",
-              "• Details — name, description, mission.",
-              "• Memory & Permissions / Schedule — memory scopes, risk, timing.",
-              "• Runs / Approvals (header) — history and human review.",
-            ].join("\n"),
+            content: explainWorkflowFromGraph(snap.nodes, snap.edges),
           });
           return;
         case "latest_run_summary":
@@ -613,7 +594,7 @@ export function AgentWorkspace({
   );
 
   const headerStatus: WorkspaceHeaderStatus = useMemo(() => {
-    if (approvalPause || runPoll?.run.status === "waiting_for_approval") {
+    if (runPoll?.run.status === "waiting_for_approval") {
       return "waiting_for_approval";
     }
     if (
@@ -626,11 +607,10 @@ export function AgentWorkspace({
     }
     if (dirty) return "unsaved";
     return "saved";
-  }, [pollRunId, runPoll?.run.status, dirty, approvalPause]);
+  }, [pollRunId, runPoll?.run.status, dirty]);
 
   const handleApprovalResolved = async () => {
     setPendingApprovalId(null);
-    setApprovalPause(false);
     const rid = pollRunId ?? lastPollRef.current?.run.id;
     if (!rid) return;
     try {
@@ -654,6 +634,7 @@ export function AgentWorkspace({
           name={name}
           initials={initialsFromName(name)}
           status={headerStatus}
+          emphasizeApprovals={headerStatus === "waiting_for_approval"}
           pendingApprovalsCount={pendingApprovalsCount}
           onWorkflow={() => setWorkflowOpen(true)}
           onDetails={() => setDetailsOpen(true)}
@@ -696,6 +677,7 @@ export function AgentWorkspace({
         <AgentFlowEditor
           ref={editorRef}
           key={agentId}
+          workflowDrawerOpen={workflowOpen}
           initialNodes={initial?.nodes}
           initialEdges={initial?.edges}
           onGraphChange={() => void persist({ showBanner: false })}
